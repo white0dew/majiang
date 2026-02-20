@@ -510,14 +510,21 @@ a {
   left: 0.65rem;
   top: 45%;
   transform: translateY(-50%);
-  width: 112px;
+  width: auto;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.42rem;
 }
 
 .table-seat--right {
   right: 0.65rem;
   top: 45%;
   transform: translateY(-50%);
-  width: 112px;
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
 }
 
 .table-seat--self {
@@ -547,11 +554,16 @@ a {
 .seat-title--side {
   flex-direction: column;
   gap: 0.1rem;
-  align-items: flex-start;
-  margin-bottom: 0.25rem;
+  min-width: 72px;
+  margin-bottom: 0.08rem;
   padding: 0.24rem 0.38rem;
   border-radius: 0.4rem;
   background: #00000022;
+}
+
+.table-seat--left .seat-title--side {
+  align-items: flex-start;
+  text-align: left;
 }
 
 .table-seat--right .seat-title--side {
@@ -575,6 +587,11 @@ a {
   display: flex;
   gap: 0.42rem;
   margin-top: 0.3rem;
+}
+
+.table-seat--left .seat-main,
+.table-seat--right .seat-main {
+  margin-top: 0;
 }
 
 .seat-main--across {
@@ -614,7 +631,7 @@ a {
 }
 
 .meld-zone--left {
-  left: 88px;
+  left: 116px;
   top: 50%;
   transform: translateY(-50%);
   flex-direction: column;
@@ -622,7 +639,7 @@ a {
 }
 
 .meld-zone--right {
-  right: 88px;
+  right: 116px;
   top: 50%;
   transform: translateY(-50%);
   flex-direction: column;
@@ -879,11 +896,11 @@ a {
   }
 
   .meld-zone--left {
-    left: 76px;
+    left: 94px;
   }
 
   .meld-zone--right {
-    right: 76px;
+    right: 94px;
   }
 
   .discard-zone--across {
@@ -932,7 +949,7 @@ a {
 
   .table-seat--left,
   .table-seat--right {
-    width: 88px;
+    width: auto;
   }
 
   .meld-zone--across {
@@ -940,11 +957,11 @@ a {
   }
 
   .meld-zone--left {
-    left: 58px;
+    left: 72px;
   }
 
   .meld-zone--right {
-    right: 58px;
+    right: 72px;
   }
 
   .discard-zone--left {
