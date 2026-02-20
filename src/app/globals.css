@@ -507,17 +507,17 @@ a {
 }
 
 .table-seat--left {
-  left: 0.45rem;
+  left: 0.65rem;
   top: 45%;
   transform: translateY(-50%);
-  width: 96px;
+  width: 112px;
 }
 
 .table-seat--right {
-  right: 0.45rem;
+  right: 0.65rem;
   top: 45%;
   transform: translateY(-50%);
-  width: 96px;
+  width: 112px;
 }
 
 .table-seat--self {
@@ -542,6 +542,21 @@ a {
 
 .seat-title strong {
   color: #fff6dc;
+}
+
+.seat-title--side {
+  flex-direction: column;
+  gap: 0.1rem;
+  align-items: flex-start;
+  margin-bottom: 0.25rem;
+  padding: 0.24rem 0.38rem;
+  border-radius: 0.4rem;
+  background: #00000022;
+}
+
+.table-seat--right .seat-title--side {
+  align-items: flex-end;
+  text-align: right;
 }
 
 .seat-title--self {
@@ -576,6 +591,12 @@ a {
 .seat-concealed--left,
 .seat-concealed--right {
   flex-direction: column;
+  gap: 0.18rem;
+}
+
+.tile-chip--compact.tile-chip--edge {
+  width: 2.15rem;
+  height: 2.8rem;
 }
 
 .meld-zone {
@@ -642,14 +663,14 @@ a {
 }
 
 .discard-zone--left {
-  left: 130px;
+  left: 168px;
   top: 210px;
   width: 170px;
   height: 250px;
 }
 
 .discard-zone--right {
-  right: 130px;
+  right: 168px;
   top: 210px;
   width: 170px;
   height: 250px;
@@ -871,14 +892,14 @@ a {
   }
 
   .discard-zone--left {
-    left: 108px;
+    left: 132px;
     top: 196px;
     width: 150px;
     height: 235px;
   }
 
   .discard-zone--right {
-    right: 108px;
+    right: 132px;
     top: 196px;
     width: 150px;
     height: 235px;
@@ -897,6 +918,11 @@ a {
     width: 2.1rem;
     height: 2.7rem;
   }
+
+  .tile-chip--compact.tile-chip--edge {
+    width: 1.95rem;
+    height: 2.55rem;
+  }
 }
 
 @media (max-width: 560px) {
@@ -906,7 +932,7 @@ a {
 
   .table-seat--left,
   .table-seat--right {
-    width: 76px;
+    width: 88px;
   }
 
   .meld-zone--across {
@@ -922,14 +948,14 @@ a {
   }
 
   .discard-zone--left {
-    left: 86px;
+    left: 106px;
     top: 186px;
     width: 120px;
     height: 220px;
   }
 
   .discard-zone--right {
-    right: 86px;
+    right: 106px;
     top: 186px;
     width: 120px;
     height: 220px;
@@ -939,6 +965,16 @@ a {
     width: 230px;
     top: 122px;
     height: 132px;
+  }
+
+  .seat-concealed--left,
+  .seat-concealed--right {
+    gap: 0.1rem;
+  }
+
+  .tile-chip--compact.tile-chip--edge {
+    width: 1.82rem;
+    height: 2.38rem;
   }
 
   .self-hand {

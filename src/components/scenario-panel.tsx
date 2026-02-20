@@ -73,7 +73,7 @@ export function ScenarioPanel({
       <div className="table-stage">
         {scenario.opponents.map((opponent) => (
           <div className={`table-seat table-seat--${opponent.seat}`} key={`seat-${opponent.seat}`}>
-            <div className="seat-title">
+            <div className={`seat-title ${opponent.seat !== "across" ? "seat-title--side" : ""}`}>
               <strong>{SEAT_META[opponent.seat].label}</strong>
               <span>定缺 {suitLabel(opponent.dingQue)}</span>
               <span>副露 {opponent.melds.length} 组</span>
@@ -84,6 +84,7 @@ export function ScenarioPanel({
                 {Array.from({ length: estimateConcealedCount(opponent) }).map((_, index) => (
                   <TileChip
                     compact
+                    className={opponent.seat !== "across" ? "tile-chip--edge" : undefined}
                     faceDown
                     key={`${opponent.seat}-hidden-${index}`}
                     vertical={opponent.seat !== "across"}
