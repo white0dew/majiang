@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="160" viewBox="0 0 120 160" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="60" y1="0" x2="60" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFDF7"/>
+      <stop offset="1" stop-color="#F2E7CC"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="114" height="154" rx="12" fill="url(#g1)" stroke="#8D6E63" stroke-width="4"/>
+  <rect x="14" y="14" width="92" height="132" rx="8" stroke="#D4BE9C" stroke-width="2" stroke-dasharray="5 5"/>
+  <circle cx="60" cy="54" r="14" fill="#E8D9BA"/>
+  <path d="M46 106h28" stroke="#6D4C41" stroke-width="5" stroke-linecap="round"/>
+  <text x="60" y="120" text-anchor="middle" font-size="18" fill="#6D4C41" font-family="sans-serif">牌面</text>
+</svg>
