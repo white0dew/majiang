@@ -1,5 +1,4 @@
 import {
-  drawTiles,
   pickRandomTileId,
   randomInt,
   removeTileOnce,
@@ -7,14 +6,9 @@ import {
   uniqueTileIds,
   createFullCounts,
 } from "@/engine/mahjong/tiles";
+import { getQuickOptionTilesByRule, getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
 import { estimateShanten, getEffectiveTileInfo, getWinningTileCandidates } from "@/engine/mahjong/evaluator";
-import { Scenario, Suit, TrainingMode } from "@/types/mahjong";
-
-const SUITS: Suit[] = ["wan", "tiao", "tong"];
-
-function randomSuit(): Suit {
-  return SUITS[randomInt(0, SUITS.length - 1)];
-}
+import { Scenario, Suit, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
 function drawPung(counts: number[]): number[] | null {
   const candidates: number[] = [];
@@ -33,7 +27,8 @@ function drawPung(counts: number[]): number[] | null {
   return [target, target, target];
 }
 
-function buildOpponents(counts: number[]): Scenario["opponents"] {
+function buildOpponents(counts: number[], ruleId: TrainingRuleId): Scenario["opponents"] {
+  const strategy = getTrainingRuleStrategy(ruleId);
   const seats: Scenario["opponents"][number]["seat"][] = ["left", "across", "right"];
 
   return seats.map((seat) => {
@@ -61,21 +56,22 @@ function buildOpponents(counts: number[]): Scenario["opponents"] {
 
     return {
       seat,
-      dingQue: randomSuit(),
+      dingQue: strategy.createOpponentDingQue(),
       discards,
       melds,
     };
   });
 }
 
-function createRawScenario(mode: TrainingMode): Scenario {
+function createRawScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
+  const strategy = getTrainingRuleStrategy(ruleId);
   const counts = createFullCounts();
   const handSize = mode === "quick" ? 13 : 14;
-  const selfDingQue = randomSuit();
-  const selfHand = drawTiles(counts, handSize, (tileId) => tileIdToSuit(tileId) !== selfDingQue);
-  const opponents = buildOpponents(counts);
+  const { selfHand, selfDingQue } = strategy.createSelfContext(counts, handSize);
+  const opponents = buildOpponents(counts, ruleId);
 
   return {
+    ruleId,
     mode,
     selfHand,
     selfDingQue,
@@ -86,16 +82,28 @@ function createRawScenario(mode: TrainingMode): Scenario {
   };
 }
 
+export function getQuickAnswerCandidates(scenario: Scenario): number[] {
+  const strategy = getTrainingRuleStrategy(scenario.ruleId);
+  const waits = getWinningTileCandidates(scenario.selfHand, scenario.remainingCounts);
+  return strategy.filterQuickCandidates(waits, scenario);
+}
+
+export function getQuickOptionTiles(scenario: Scenario): number[] {
+  return getQuickOptionTilesByRule(scenario);
+}
+
 function quickModeValid(scenario: Scenario): boolean {
-  if (hasSelfDingQueTiles(scenario)) {
+  const strategy = getTrainingRuleStrategy(scenario.ruleId);
+  if (!strategy.isSelfHandValid(scenario)) {
     return false;
   }
-  const waits = getWinningTileCandidates(scenario.selfHand, scenario.remainingCounts);
+  const waits = getQuickAnswerCandidates(scenario);
   return waits.length > 0 && waits.length <= 9;
 }
 
 function discardModeValid(scenario: Scenario): boolean {
-  if (scenario.selfHand.some((tileId) => tileIdToSuit(tileId) === scenario.selfDingQue)) {
+  const strategy = getTrainingRuleStrategy(scenario.ruleId);
+  if (!strategy.isSelfHandValid(scenario)) {
     return false;
   }
 
@@ -116,9 +124,9 @@ function discardModeValid(scenario: Scenario): boolean {
   return max - min >= 3;
 }
 
-export function generateScenario(mode: TrainingMode): Scenario {
+export function generateScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
   for (let i = 0; i < 220; i += 1) {
-    const scenario = createRawScenario(mode);
+    const scenario = createRawScenario(mode, ruleId);
     if (mode === "quick" && quickModeValid(scenario)) {
       return scenario;
     }
@@ -127,10 +135,13 @@ export function generateScenario(mode: TrainingMode): Scenario {
     }
   }
 
-  return createRawScenario(mode);
+  return createRawScenario(mode, ruleId);
 }
 
 export function hasSelfDingQueTiles(scenario: Scenario): boolean {
+  if (!scenario.selfDingQue) {
+    return false;
+  }
   return scenario.selfHand.some((tileId) => tileIdToSuit(tileId) === scenario.selfDingQue);
 }
 

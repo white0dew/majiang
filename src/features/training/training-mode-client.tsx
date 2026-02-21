@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScenarioPanel } from "@/components/scenario-panel";
 import { TileChip } from "@/components/tile-chip";
-import { getWinningTileCandidates } from "@/engine/mahjong/evaluator";
-import { generateScenario, hasSelfDingQueTiles } from "@/engine/mahjong/scenario";
+import { getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
+import { generateScenario, getQuickAnswerCandidates, getQuickOptionTiles, hasSelfDingQueTiles } from "@/engine/mahjong/scenario";
 import { evaluateDiscardOptions, explainDiscardComparison, quickModeScore } from "@/engine/scoring/decision";
-import { suitLabel, tileIdToLabel, tileIdToSuit } from "@/engine/mahjong/tiles";
+import { tileIdToLabel } from "@/engine/mahjong/tiles";
 import { saveRecord } from "@/lib/storage/training-store";
-import { DiscardEvaluation, Scenario, TrainingMode } from "@/types/mahjong";
+import { DiscardEvaluation, Scenario, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
 const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
   quick: {
@@ -21,36 +21,36 @@ const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
   },
 };
 
-function createModeScenario(mode: TrainingMode): Scenario {
-  let scenario = generateScenario(mode);
+function createModeScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
+  let scenario = generateScenario(mode, ruleId);
 
   // Safety net: any mode must not contain self ding-que tiles in hand.
   for (let i = 0; i < 24 && hasSelfDingQueTiles(scenario); i += 1) {
-    scenario = generateScenario(mode);
+    scenario = generateScenario(mode, ruleId);
   }
 
   return scenario;
 }
 
-export function TrainingModeClient({ mode }: { mode: TrainingMode }) {
+export function TrainingModeClient({ mode, ruleId }: { mode: TrainingMode; ruleId: TrainingRuleId }) {
   if (mode === "quick") {
-    return <QuickMode />;
+    return <QuickMode ruleId={ruleId} />;
   }
 
-  return <DiscardMode />;
+  return <DiscardMode ruleId={ruleId} />;
 }
 
-function useScenario(mode: TrainingMode): [Scenario | null, () => void] {
+function useScenario(mode: TrainingMode, ruleId: TrainingRuleId): [Scenario | null, () => void] {
   const [scenario, setScenario] = useState<Scenario | null>(null);
 
   useEffect(() => {
-    setScenario(createModeScenario(mode));
-  }, [mode]);
+    setScenario(createModeScenario(mode, ruleId));
+  }, [mode, ruleId]);
 
   return [
     scenario,
     () => {
-      setScenario(createModeScenario(mode));
+      setScenario(createModeScenario(mode, ruleId));
     },
   ];
 }
@@ -62,12 +62,13 @@ function elapsedSince(startedAt: number): number {
   return Math.max(0, Date.now() - startedAt);
 }
 
-function QuickMode() {
-  const [scenario, resetScenario] = useScenario("quick");
+function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
+  const [scenario, resetScenario] = useScenario("quick", ruleId);
   const [selected, setSelected] = useState<number[]>([]);
   const [selectedNoWait, setSelectedNoWait] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(0);
+  const ruleStrategy = useMemo(() => getTrainingRuleStrategy(ruleId), [ruleId]);
   const [result, setResult] = useState<
     | {
         score: number;
@@ -85,18 +86,14 @@ function QuickMode() {
     if (!scenario) {
       return [];
     }
-    return getWinningTileCandidates(scenario.selfHand, scenario.remainingCounts).filter(
-      (tileId) => tileIdToSuit(tileId) !== scenario.selfDingQue,
-    );
+    return getQuickAnswerCandidates(scenario);
   }, [scenario]);
 
   const quickOptionTiles = useMemo(() => {
     if (!scenario) {
       return [];
     }
-    return Array.from({ length: 27 }, (_, tileId) => tileId).filter(
-      (tileId) => tileIdToSuit(tileId) !== scenario.selfDingQue,
-    );
+    return getQuickOptionTiles(scenario);
   }, [scenario]);
 
   useEffect(() => {
@@ -159,6 +156,7 @@ function QuickMode() {
 
     saveRecord({
       mode: "quick",
+      ruleId,
       correct: evaluation.correct,
       score: evaluation.score,
       elapsedMs: finalElapsed,
@@ -178,16 +176,17 @@ function QuickMode() {
   return (
     <section className="mode-wrap">
       <header className="mode-header">
+        <p className="rule-tag">{ruleStrategy.title}</p>
         <h1>{modeText.quick.title}</h1>
         <p>{modeText.quick.subtitle}</p>
       </header>
 
       <div className="countdown">当前用时: {(elapsedMs / 1000).toFixed(1)}s</div>
-      <ScenarioPanel scenario={scenario} disableDiscard selfHint="请观察牌局并判断当前可胡牌" />
+      <ScenarioPanel scenario={scenario} disableDiscard selfHint={ruleStrategy.quickSelfHint} />
 
       <div className="answer-panel">
         <h3>请选择你认为能胡的牌</h3>
-        <p>已隐藏定缺花色：{suitLabel(scenario.selfDingQue)}</p>
+        <p>{ruleStrategy.quickPanelHint(scenario)}</p>
         <div className="quick-actions">
           <button
             className={`btn-ghost quick-no-wait ${selectedNoWait ? "quick-no-wait--active" : ""}`}
@@ -233,11 +232,12 @@ function QuickMode() {
   );
 }
 
-function DiscardMode() {
-  const [scenario, resetScenario] = useScenario("discard");
+function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
+  const [scenario, resetScenario] = useScenario("discard", ruleId);
   const [pickedDiscard, setPickedDiscard] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(0);
+  const ruleStrategy = useMemo(() => getTrainingRuleStrategy(ruleId), [ruleId]);
   const [result, setResult] = useState<
     | {
         chosen: DiscardEvaluation;
@@ -293,6 +293,7 @@ function DiscardMode() {
 
     saveRecord({
       mode: "discard",
+      ruleId,
       correct,
       score: Math.round(chosen.totalScore),
       elapsedMs: finalElapsed,
@@ -311,6 +312,7 @@ function DiscardMode() {
   return (
     <section className="mode-wrap">
       <header className="mode-header">
+        <p className="rule-tag">{ruleStrategy.title}</p>
         <h1>{modeText.discard.title}</h1>
         <p>{modeText.discard.subtitle}</p>
       </header>
@@ -322,7 +324,7 @@ function DiscardMode() {
         onPickDiscard={setPickedDiscard}
         pickedDiscard={pickedDiscard}
         disableDiscard={Boolean(result)}
-        selfHint="请选择本巡要打出的牌"
+        selfHint={ruleStrategy.discardSelfHint}
       />
 
       <div className="answer-panel">

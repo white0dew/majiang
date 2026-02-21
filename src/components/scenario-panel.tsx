@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { TileChip } from "@/components/tile-chip";
+import { getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
 import { suitLabel } from "@/engine/mahjong/tiles";
 import { OpponentState, Scenario } from "@/types/mahjong";
 
@@ -62,12 +63,22 @@ export function ScenarioPanel({
   disableDiscard,
   selfHint,
 }: ScenarioPanelProps) {
+  const ruleStrategy = getTrainingRuleStrategy(scenario.ruleId);
+
+  function formatDingQue(value: OpponentState["dingQue"]): string {
+    return value ? `定缺 ${suitLabel(value)}` : "无定缺";
+  }
+
   return (
     <section className="mahjong-board">
       <div className="board-meta">
         <span>第 {scenario.round} 巡</span>
         <span>剩余牌: {scenario.wallRemaining}</span>
-        <span>你的定缺: {suitLabel(scenario.selfDingQue)}</span>
+        <span>
+          {ruleStrategy.usesDingQue && scenario.selfDingQue
+            ? `你的定缺: ${suitLabel(scenario.selfDingQue)}`
+            : "玩法: 无定缺"}
+        </span>
       </div>
 
       <div className="table-stage">
@@ -75,7 +86,7 @@ export function ScenarioPanel({
           <div className={`table-seat table-seat--${opponent.seat}`} key={`seat-${opponent.seat}`}>
             <div className={`seat-title ${opponent.seat !== "across" ? "seat-title--side" : ""}`}>
               <strong>{SEAT_META[opponent.seat].label}</strong>
-              <span>定缺 {suitLabel(opponent.dingQue)}</span>
+              <span>{formatDingQue(opponent.dingQue)}</span>
               <span>副露 {opponent.melds.length} 组</span>
             </div>
 
@@ -130,7 +141,7 @@ export function ScenarioPanel({
         ))}
 
         <div className="table-center-badge">
-          <span>川麻训练局</span>
+          <span>{ruleStrategy.shortLabel}训练局</span>
         </div>
 
         <div className="table-seat table-seat--self">

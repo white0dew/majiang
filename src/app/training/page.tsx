@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listTrainingRuleStrategies, resolveTrainingRuleId } from "@/engine/mahjong/rule-strategies";
 
 const modes = [
   {
@@ -15,12 +16,37 @@ const modes = [
   },
 ] as const;
 
-export default function TrainingHallPage() {
+export default async function TrainingHallPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ rule?: string }>;
+}) {
+  const { rule: rawRuleId } = await searchParams;
+  const selectedRuleId = resolveTrainingRuleId(rawRuleId);
+  const rules = listTrainingRuleStrategies();
+  const selectedRule = rules.find((item) => item.id === selectedRuleId) ?? rules[0];
+
   return (
     <main className="page-wrap">
       <section className="section-header">
         <h1>训练大厅</h1>
-        <p>请选择一个模式开始练习，系统会自动生成随机牌局并给出决策反馈。</p>
+        <p>先选玩法规则，再选训练模式。系统会按对应规则生成牌局并给出决策反馈。</p>
+      </section>
+
+      <section className="rule-select-card">
+        <h2>当前玩法</h2>
+        <div className="rule-select-row">
+          {rules.map((rule) => (
+            <Link
+              className={`btn-ghost rule-select-btn ${selectedRuleId === rule.id ? "rule-select-btn--active" : ""}`}
+              href={`/training?rule=${rule.id}`}
+              key={rule.id}
+            >
+              {rule.shortLabel}
+            </Link>
+          ))}
+        </div>
+        <p>{selectedRule.description}</p>
       </section>
 
       <section className="mode-grid">
@@ -28,7 +54,7 @@ export default function TrainingHallPage() {
           <article className="mode-card" key={item.mode}>
             <h2>{item.title}</h2>
             <p>{item.desc}</p>
-            <Link className="btn-primary" href={`/training/${item.mode}`}>
+            <Link className="btn-primary" href={`/training/${item.mode}?rule=${selectedRuleId}`}>
               {item.action}
             </Link>
           </article>

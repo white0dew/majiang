@@ -19,10 +19,10 @@ export default function Home() {
   return (
     <main className="page-wrap">
       <section className="hero-card">
-        <p className="hero-kicker">四川麻将决策训练</p>
+        <p className="hero-kicker">多玩法麻将决策训练</p>
         <h1>麻局教练</h1>
         <p>
-          专注提升四川麻将的大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
+          支持四川血战与贵州捉鸡等规则，专注提升大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
         </p>
         <div className="hero-actions">
           <Link className="btn-primary" href="/training">

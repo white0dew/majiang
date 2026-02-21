@@ -170,6 +170,46 @@ a {
     0 8px 16px #71553912;
 }
 
+.rule-select-card {
+  margin-top: 1rem;
+  border: 1px solid #8d6e6333;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, #fff8e7 0%, #f2e0bc 100%);
+  box-shadow:
+    inset 0 1px 0 #fffdf6,
+    0 8px 16px #71553912;
+}
+
+.rule-select-card h2 {
+  margin: 0;
+  color: var(--wood);
+}
+
+.rule-select-card p {
+  margin: 0.55rem 0 0;
+  color: var(--text-sub);
+  line-height: 1.65;
+}
+
+.rule-select-row {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rule-select-btn {
+  min-width: 6rem;
+}
+
+.rule-select-btn--active {
+  border-color: #2e7d3299;
+  background: #deeedf;
+  color: #1f4f23;
+  box-shadow: inset 0 0 0 1px #2e7d3240;
+}
+
 .rule-hall-entry h2,
 .rule-entry-card h2,
 .rule-reminder-card h2,

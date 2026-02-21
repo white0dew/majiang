@@ -1,6 +1,7 @@
-import { TRAINING_MODES, TrainingMode, TrainingRecord } from "@/types/mahjong";
+import { TRAINING_MODES, TRAINING_RULE_IDS, TrainingMode, TrainingRecord, TrainingRuleId } from "@/types/mahjong";
 
 const STORAGE_KEY = "majiang-trainer-records-v1";
+const DEFAULT_RULE_ID: TrainingRuleId = "sichuan-blood-battle";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined";
@@ -8,6 +9,46 @@ function canUseStorage(): boolean {
 
 function isTrainingMode(value: string): value is TrainingMode {
   return (TRAINING_MODES as readonly string[]).includes(value);
+}
+
+function isTrainingRuleId(value: string): value is TrainingRuleId {
+  return (TRAINING_RULE_IDS as readonly string[]).includes(value);
+}
+
+function normalizeRecord(input: unknown): TrainingRecord | null {
+  if (typeof input !== "object" || input === null) {
+    return null;
+  }
+
+  const item = input as Partial<TrainingRecord>;
+  if (
+    typeof item.mode !== "string" ||
+    !isTrainingMode(item.mode) ||
+    typeof item.score !== "number" ||
+    typeof item.correct !== "boolean" ||
+    (typeof item.elapsedMs !== "undefined" && typeof item.elapsedMs !== "number") ||
+    typeof item.summary !== "string" ||
+    typeof item.id !== "string" ||
+    typeof item.createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  const ruleId =
+    typeof item.ruleId === "string" && isTrainingRuleId(item.ruleId)
+      ? item.ruleId
+      : DEFAULT_RULE_ID;
+
+  return {
+    id: item.id,
+    mode: item.mode,
+    ruleId,
+    correct: item.correct,
+    score: item.score,
+    elapsedMs: item.elapsedMs,
+    createdAt: item.createdAt,
+    summary: item.summary,
+  };
 }
 
 export function loadRecords(): TrainingRecord[] {
@@ -21,19 +62,11 @@ export function loadRecords(): TrainingRecord[] {
   }
 
   try {
-    const parsed = JSON.parse(raw) as TrainingRecord[];
+    const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (item): item is TrainingRecord =>
-          typeof item === "object" &&
-          item !== null &&
-          typeof item.mode === "string" &&
-          isTrainingMode(item.mode) &&
-          typeof item.score === "number" &&
-          typeof item.correct === "boolean" &&
-          (typeof item.elapsedMs === "undefined" || typeof item.elapsedMs === "number") &&
-          typeof item.summary === "string",
-      );
+      return parsed
+        .map((item) => normalizeRecord(item))
+        .filter((item): item is TrainingRecord => Boolean(item));
     }
     return [];
   } catch {
@@ -69,6 +102,7 @@ export type ProgressStats = {
   avgScore: number;
   accuracy: number;
   byMode: Record<TrainingMode, { count: number; avgScore: number; accuracy: number }>;
+  byRule: Record<TrainingRuleId, { count: number; avgScore: number; accuracy: number }>;
 };
 
 export function summarizeRecords(records: TrainingRecord[]): ProgressStats {
@@ -76,6 +110,9 @@ export function summarizeRecords(records: TrainingRecord[]): ProgressStats {
     quick: { count: 0, avgScore: 0, accuracy: 0 },
     discard: { count: 0, avgScore: 0, accuracy: 0 },
   };
+  const baseByRule = Object.fromEntries(
+    TRAINING_RULE_IDS.map((ruleId) => [ruleId, { count: 0, avgScore: 0, accuracy: 0 }]),
+  ) as ProgressStats["byRule"];
 
   if (records.length === 0) {
     return {
@@ -83,6 +120,7 @@ export function summarizeRecords(records: TrainingRecord[]): ProgressStats {
       avgScore: 0,
       accuracy: 0,
       byMode: baseByMode,
+      byRule: baseByRule,
     };
   }
 
@@ -101,6 +139,13 @@ export function summarizeRecords(records: TrainingRecord[]): ProgressStats {
       modeStats.avgScore += item.score;
       modeStats.accuracy += item.correct ? 1 : 0;
     }
+
+    const ruleStats = baseByRule[item.ruleId];
+    if (ruleStats) {
+      ruleStats.count += 1;
+      ruleStats.avgScore += item.score;
+      ruleStats.accuracy += item.correct ? 1 : 0;
+    }
   }
 
   for (const mode of Object.keys(baseByMode) as TrainingMode[]) {
@@ -111,10 +156,19 @@ export function summarizeRecords(records: TrainingRecord[]): ProgressStats {
     }
   }
 
+  for (const ruleId of TRAINING_RULE_IDS) {
+    const ruleStats = baseByRule[ruleId];
+    if (ruleStats.count > 0) {
+      ruleStats.avgScore = Math.round(ruleStats.avgScore / ruleStats.count);
+      ruleStats.accuracy = Math.round((ruleStats.accuracy / ruleStats.count) * 100);
+    }
+  }
+
   return {
     total: records.length,
     avgScore: Math.round(scoreSum / records.length),
     accuracy: Math.round((correctCount / records.length) * 100),
     byMode: baseByMode,
+    byRule: baseByRule,
   };
 }

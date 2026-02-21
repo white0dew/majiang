@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { listTrainingRuleStrategies } from "@/engine/mahjong/rule-strategies";
 import { clearRecords, loadRecords, summarizeRecords } from "@/lib/storage/training-store";
+import { TrainingRuleId } from "@/types/mahjong";
 
 const modeName = {
   quick: "快答",
   discard: "弃牌",
 } as const;
+const ruleName = Object.fromEntries(
+  listTrainingRuleStrategies().map((rule) => [rule.id, rule.shortLabel]),
+) as Record<TrainingRuleId, string>;
 
 export default function ProgressPage() {
   const [records, setRecords] = useState(() => loadRecords());
@@ -47,6 +52,18 @@ export default function ProgressPage() {
       </section>
 
       <section className="rule-card">
+        <h2>玩法分布</h2>
+        <ul>
+          {(Object.keys(ruleName) as TrainingRuleId[]).map((ruleId) => (
+            <li key={ruleId}>
+              {ruleName[ruleId]}：{stats.byRule[ruleId].count} 题，平均 {stats.byRule[ruleId].avgScore} 分，准确率{" "}
+              {stats.byRule[ruleId].accuracy}%
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rule-card">
         <div className="table-head">
           <h2>最近记录</h2>
           <button
@@ -68,7 +85,8 @@ export default function ProgressPage() {
             {records.slice(0, 20).map((record) => (
               <article className="history-item" key={record.id}>
                 <p>
-                  [{modeName[record.mode]}] {record.score} 分 / {record.correct ? "合理" : "待优化"}
+                  [{ruleName[record.ruleId]} · {modeName[record.mode]}] {record.score} 分 /{" "}
+                  {record.correct ? "合理" : "待优化"}
                 </p>
                 <p>{record.summary}</p>
                 <p>{new Date(record.createdAt).toLocaleString()}</p>
