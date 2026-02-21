@@ -5,6 +5,7 @@ import {
   suitLabel,
   tileIdToSuit,
 } from "@/engine/mahjong/tiles";
+import { isWinningHandWithJiang258 } from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TRAINING_RULE_IDS, TrainingRuleId } from "@/types/mahjong";
 
 const SUITS: Suit[] = ["wan", "tiao", "tong"];
@@ -85,8 +86,29 @@ const guizhouZhuojiStrategy: TrainingRuleStrategy = {
   filterQuickOptionTiles: (tileIds) => tileIds,
 };
 
+const changshaJiangStrategy: TrainingRuleStrategy = {
+  id: "changsha-258-jiang",
+  title: "长沙麻将（258 将）",
+  shortLabel: "长沙将牌",
+  description: "无定缺，快答按 258 将规则判断可胡牌。",
+  usesDingQue: false,
+  quickSelfHint: "请观察牌局并判断当前可胡牌（将牌需为 2/5/8）",
+  discardSelfHint: "请选择本巡要打出的牌（将牌需为 2/5/8）",
+  quickPanelHint: () => "本玩法无定缺，胡牌时将牌（对子）需满足 2/5/8。",
+  createSelfContext: (counts, handSize) => ({
+    selfHand: drawTiles(counts, handSize),
+    selfDingQue: null,
+  }),
+  createOpponentDingQue: () => null,
+  isSelfHandValid: () => true,
+  filterQuickCandidates: (candidates, scenario) =>
+    candidates.filter((tileId) => isWinningHandWithJiang258(scenario.selfHand.concat(tileId))),
+  filterQuickOptionTiles: (tileIds) => tileIds,
+};
+
 export const TRAINING_RULE_STRATEGIES: Record<TrainingRuleId, TrainingRuleStrategy> = {
   "sichuan-blood-battle": sichuanBloodBattleStrategy,
+  "changsha-258-jiang": changshaJiangStrategy,
   "guizhou-zhuoji": guizhouZhuojiStrategy,
 };
 

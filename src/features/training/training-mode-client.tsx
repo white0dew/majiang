@@ -185,7 +185,7 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
       <ScenarioPanel scenario={scenario} disableDiscard selfHint={ruleStrategy.quickSelfHint} />
 
       <div className="answer-panel">
-        <h3>请选择你认为能胡的牌</h3>
+        <h3>请选择你认为能胡的牌（⚠️ 请考虑当前已露出的牌）</h3>
         <p>{ruleStrategy.quickPanelHint(scenario)}</p>
         <div className="quick-actions">
           <button

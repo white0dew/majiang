@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const highlights = [
@@ -15,6 +16,8 @@ const highlights = [
   },
 ];
 
+const githubRepo = "https://github.com/white0dew/majiang";
+
 export default function Home() {
   return (
     <main className="page-wrap">
@@ -22,7 +25,7 @@ export default function Home() {
         <p className="hero-kicker">多玩法麻将决策训练</p>
         <h1>麻局教练</h1>
         <p>
-          支持四川血战与贵州捉鸡等规则，专注提升大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
+          支持四川血战、长沙将牌与贵州捉鸡等规则，专注提升大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
         </p>
         <div className="hero-actions">
           <Link className="btn-primary" href="/training">
@@ -41,6 +44,42 @@ export default function Home() {
             <p>{item.text}</p>
           </article>
         ))}
+      </section>
+
+      <section className="contact-card" aria-label="源码与作者联系方式">
+        <div className="contact-main">
+          <p className="hero-kicker">开源与交流</p>
+          <h2>源码与作者微信</h2>
+          <p>欢迎查看源码，也欢迎扫码交流实战问题与训练思路。</p>
+          <p className="author-name">作者：青玉白露</p>
+          <div className="contact-actions">
+            <a
+              className="btn-ghost contact-link"
+              href={githubRepo}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub 源码地址
+            </a>
+            <details className="wechat-popover">
+              <summary className="btn-ghost wechat-trigger">青玉白露微信二维码</summary>
+              <figure className="wechat-panel">
+                <Image
+                  className="wechat-qr"
+                  src="/whitedew.jpg"
+                  alt="青玉白露微信二维码，微信号 whitedewstory"
+                  width={220}
+                  height={310}
+                />
+                <figcaption className="wechat-id">
+                  作者：青玉白露 · 微信号：whitedewstory
+                </figcaption>
+              </figure>
+            </details>
+          </div>
+          <p className="contact-note">悬停可弹出二维码，移动端可点击查看。</p>
+          <p className="contact-url">{githubRepo}</p>
+        </div>
       </section>
     </main>
   );

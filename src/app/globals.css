@@ -153,6 +153,123 @@ a {
   box-shadow: 0 8px 16px #71553912;
 }
 
+.contact-card {
+  margin-top: 1.2rem;
+  border: 1px solid #8d6e6340;
+  border-radius: 1rem;
+  padding: 1rem;
+  background:
+    linear-gradient(170deg, #fff9ec 0%, #f4e4c3 52%, #ead2a6 100%),
+    repeating-linear-gradient(
+      -45deg,
+      #ffffff08,
+      #ffffff08 14px,
+      #00000006 14px,
+      #00000006 28px
+    );
+  box-shadow:
+    inset 0 1px 0 #fffcf4,
+    0 10px 20px #71553916;
+  display: grid;
+  gap: 1rem;
+}
+
+.contact-main h2 {
+  margin: 0.25rem 0 0;
+  color: var(--wood);
+}
+
+.contact-main p {
+  margin: 0.55rem 0 0;
+  color: var(--text-sub);
+  line-height: 1.65;
+}
+
+.author-name {
+  font-weight: 700;
+  color: #5c3c26;
+}
+
+.contact-link {
+  margin-top: 0;
+}
+
+.contact-actions {
+  margin-top: 0.85rem;
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.contact-note {
+  font-size: 0.85rem;
+  color: #7a5434;
+}
+
+.contact-url {
+  font-size: 0.85rem;
+  word-break: break-all;
+  color: #7a5434;
+}
+
+.wechat-popover {
+  position: relative;
+}
+
+.wechat-trigger {
+  list-style: none;
+}
+
+.wechat-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.wechat-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.55rem);
+  z-index: 15;
+  margin: 0;
+  width: min(240px, 72vw);
+  padding: 0.55rem;
+  border-radius: 0.8rem;
+  border: 1px solid #8d6e6350;
+  background: #fffcf5;
+  box-shadow: 0 12px 22px #55381f30;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    visibility 0.16s ease;
+}
+
+.wechat-popover:hover .wechat-panel,
+.wechat-popover:focus-within .wechat-panel,
+.wechat-popover[open] .wechat-panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.wechat-qr {
+  width: 100%;
+  height: auto;
+  border-radius: 0.6rem;
+  border: 1px solid #8d6e633d;
+}
+
+.wechat-id {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  color: #5f422d;
+  font-weight: 600;
+}
+
 .mode-card {
   display: flex;
   flex-direction: column;
@@ -925,6 +1042,12 @@ a {
 
   .brand-title {
     font-size: 1rem;
+  }
+
+  .wechat-panel {
+    left: auto;
+    right: 0;
+    width: min(240px, 82vw);
   }
 
   .table-stage {

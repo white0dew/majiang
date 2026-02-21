@@ -10,6 +10,11 @@ import { getQuickOptionTilesByRule, getTrainingRuleStrategy } from "@/engine/mah
 import { estimateShanten, getEffectiveTileInfo, getWinningTileCandidates } from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
+const MAX_SCENARIO_ATTEMPTS: Record<TrainingMode, number> = {
+  quick: 20000,
+  discard: 220,
+};
+
 function drawPung(counts: number[]): number[] | null {
   const candidates: number[] = [];
   for (let id = 0; id < counts.length; id += 1) {
@@ -77,7 +82,6 @@ function createRawScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario
     selfDingQue,
     opponents,
     round: randomInt(3, 14),
-    wallRemaining: counts.reduce((sum, current) => sum + current, 0),
     remainingCounts: counts,
   };
 }
@@ -125,7 +129,8 @@ function discardModeValid(scenario: Scenario): boolean {
 }
 
 export function generateScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
-  for (let i = 0; i < 220; i += 1) {
+  const maxAttempts = MAX_SCENARIO_ATTEMPTS[mode];
+  for (let i = 0; i < maxAttempts; i += 1) {
     const scenario = createRawScenario(mode, ruleId);
     if (mode === "quick" && quickModeValid(scenario)) {
       return scenario;

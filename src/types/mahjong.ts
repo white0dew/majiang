@@ -2,7 +2,7 @@ export type Suit = "wan" | "tiao" | "tong";
 
 export const TRAINING_MODES = ["quick", "discard"] as const;
 export type TrainingMode = (typeof TRAINING_MODES)[number];
-export const TRAINING_RULE_IDS = ["sichuan-blood-battle", "guizhou-zhuoji"] as const;
+export const TRAINING_RULE_IDS = ["sichuan-blood-battle", "changsha-258-jiang", "guizhou-zhuoji"] as const;
 export type TrainingRuleId = (typeof TRAINING_RULE_IDS)[number];
 
 export type OpponentState = {
@@ -19,7 +19,6 @@ export type Scenario = {
   selfDingQue: Suit | null;
   opponents: OpponentState[];
   round: number;
-  wallRemaining: number;
   remainingCounts: number[];
 };
 

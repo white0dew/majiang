@@ -73,7 +73,6 @@ export function ScenarioPanel({
     <section className="mahjong-board">
       <div className="board-meta">
         <span>第 {scenario.round} 巡</span>
-        <span>剩余牌: {scenario.wallRemaining}</span>
         <span>
           {ruleStrategy.usesDingQue && scenario.selfDingQue
             ? `你的定缺: ${suitLabel(scenario.selfDingQue)}`

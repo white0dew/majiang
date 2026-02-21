@@ -8,6 +8,11 @@ function rank(tileId: number): number {
   return (tileId % 9) + 1;
 }
 
+function isJiangRank(tileId: number): boolean {
+  const tileRank = rank(tileId);
+  return tileRank === 2 || tileRank === 5 || tileRank === 8;
+}
+
 function canSequence(counts: number[], tileId: number): boolean {
   const r = rank(tileId);
   if (r > 7) {
@@ -98,6 +103,37 @@ export function isWinningHand(tiles: number[]): boolean {
 
   for (let id = 0; id < TILE_KIND_COUNT; id += 1) {
     if (counts[id] >= 2) {
+      counts[id] -= 2;
+      const ok = allMelds(counts);
+      counts[id] += 2;
+      if (ok) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function isWinningHandWithJiang258(tiles: number[]): boolean {
+  if (tiles.length % 3 !== 2) {
+    return false;
+  }
+
+  const counts = countTiles(tiles);
+
+  if (tiles.length === 14 && isSevenPairs(counts)) {
+    for (let id = 0; id < TILE_KIND_COUNT; id += 1) {
+      if (counts[id] >= 2 && isJiangRank(id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 长沙 258 将：将牌只能用 2/5/8 组成。
+  for (let id = 0; id < TILE_KIND_COUNT; id += 1) {
+    if (counts[id] >= 2 && isJiangRank(id)) {
       counts[id] -= 2;
       const ok = allMelds(counts);
       counts[id] += 2;
