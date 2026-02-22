@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Ma_Shan_Zheng, Noto_Sans_SC } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { MainNav } from "@/components/main-nav";
 import "./globals.css";
 
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body className={`${bodyFont.variable} ${titleFont.variable}`}>
         <MainNav />
         {children}
+        <Analytics />
       </body>
     </html>
   );

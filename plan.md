@@ -89,3 +89,7 @@
 
 - [x] 首页联系方式区明确展示作者为「青玉白露」。☑️
 - [x] README 补充作者名称「青玉白露」。☑️
+
+# Vercel Analytics 接入
+
+- [x] 安装 `@vercel/analytics` 并在根布局接入 `<Analytics />`。☑️
