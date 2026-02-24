@@ -1,13 +1,20 @@
 import {
+  createCountsByTileIds,
+  isNumberTile,
   pickRandomTileId,
   randomInt,
   removeTileOnce,
   tileIdToSuit,
   uniqueTileIds,
-  createFullCounts,
 } from "@/engine/mahjong/tiles";
 import { getQuickOptionTilesByRule, getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
-import { estimateShanten, getEffectiveTileInfo, getWinningTileCandidates } from "@/engine/mahjong/evaluator";
+import {
+  estimateShanten,
+  estimateShantenWithJiang258,
+  getEffectiveTileInfo,
+  getEffectiveTileInfoWithJiang258,
+  getWinningTileCandidates,
+} from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
 const MAX_SCENARIO_ATTEMPTS: Record<TrainingMode, number> = {
@@ -15,10 +22,10 @@ const MAX_SCENARIO_ATTEMPTS: Record<TrainingMode, number> = {
   discard: 220,
 };
 
-function drawPung(counts: number[]): number[] | null {
+function drawPung(counts: number[], canUseTile: (tileId: number) => boolean = () => true): number[] | null {
   const candidates: number[] = [];
   for (let id = 0; id < counts.length; id += 1) {
-    if (counts[id] >= 3) {
+    if (counts[id] >= 3 && canUseTile(id)) {
       candidates.push(id);
     }
   }
@@ -37,12 +44,15 @@ function buildOpponents(counts: number[], ruleId: TrainingRuleId): Scenario["opp
   const seats: Scenario["opponents"][number]["seat"][] = ["left", "across", "right"];
 
   return seats.map((seat) => {
+    const dingQue = strategy.createOpponentDingQue();
+    const canMeldTile = (tileId: number) =>
+      !(strategy.usesDingQue && dingQue && tileIdToSuit(tileId) === dingQue);
     const melds: number[][] = [];
     const meldCount = randomInt(0, 2);
 
     for (let i = 0; i < meldCount; i += 1) {
       if (Math.random() < 0.65) {
-        const pung = drawPung(counts);
+        const pung = drawPung(counts, canMeldTile);
         if (pung) {
           melds.push(pung);
         }
@@ -61,7 +71,7 @@ function buildOpponents(counts: number[], ruleId: TrainingRuleId): Scenario["opp
 
     return {
       seat,
-      dingQue: strategy.createOpponentDingQue(),
+      dingQue,
       discards,
       melds,
     };
@@ -70,7 +80,7 @@ function buildOpponents(counts: number[], ruleId: TrainingRuleId): Scenario["opp
 
 function createRawScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
   const strategy = getTrainingRuleStrategy(ruleId);
-  const counts = createFullCounts();
+  const counts = createCountsByTileIds(strategy.tileIds);
   const handSize = mode === "quick" ? 13 : 14;
   const { selfHand, selfDingQue } = strategy.createSelfContext(counts, handSize);
   const opponents = buildOpponents(counts, ruleId);
@@ -96,9 +106,25 @@ export function getQuickOptionTiles(scenario: Scenario): number[] {
   return getQuickOptionTilesByRule(scenario);
 }
 
+function opponentsValidByRule(scenario: Scenario): boolean {
+  const strategy = getTrainingRuleStrategy(scenario.ruleId);
+  if (!strategy.usesDingQue) {
+    return true;
+  }
+
+  return scenario.opponents.every((opponent) =>
+    opponent.dingQue
+      ? opponent.melds.every((meld) => meld.every((tileId) => tileIdToSuit(tileId) !== opponent.dingQue))
+      : true,
+  );
+}
+
 function quickModeValid(scenario: Scenario): boolean {
   const strategy = getTrainingRuleStrategy(scenario.ruleId);
   if (!strategy.isSelfHandValid(scenario)) {
+    return false;
+  }
+  if (!opponentsValidByRule(scenario)) {
     return false;
   }
   const waits = getQuickAnswerCandidates(scenario);
@@ -107,7 +133,11 @@ function quickModeValid(scenario: Scenario): boolean {
 
 function discardModeValid(scenario: Scenario): boolean {
   const strategy = getTrainingRuleStrategy(scenario.ruleId);
+  const useJiang258 = scenario.ruleId === "changsha-258-jiang";
   if (!strategy.isSelfHandValid(scenario)) {
+    return false;
+  }
+  if (!opponentsValidByRule(scenario)) {
     return false;
   }
 
@@ -118,8 +148,10 @@ function discardModeValid(scenario: Scenario): boolean {
 
   const scores = options.map((tileId) => {
     const next = removeTileOnce(scenario.selfHand, tileId);
-    const shanten = estimateShanten(next);
-    const effective = getEffectiveTileInfo(next, scenario.remainingCounts).copyCount;
+    const shanten = useJiang258 ? estimateShantenWithJiang258(next) : estimateShanten(next);
+    const effective = useJiang258
+      ? getEffectiveTileInfoWithJiang258(next, scenario.remainingCounts).copyCount
+      : getEffectiveTileInfo(next, scenario.remainingCounts).copyCount;
     return 20 - shanten * 4 + effective * 0.35;
   });
 
@@ -155,9 +187,16 @@ export function detectFlushSuit(melds: number[][]): Suit | null {
     return null;
   }
 
-  const firstSuit = tileIdToSuit(melds[0][0]);
+  const firstTile = melds[0][0];
+  if (!isNumberTile(firstTile)) {
+    return null;
+  }
+  const firstSuit = tileIdToSuit(firstTile);
+  if (!firstSuit) {
+    return null;
+  }
   for (const meld of melds) {
-    if (!meld.every((tile) => tileIdToSuit(tile) === firstSuit)) {
+    if (!meld.every((tile) => isNumberTile(tile) && tileIdToSuit(tile) === firstSuit)) {
       return null;
     }
   }

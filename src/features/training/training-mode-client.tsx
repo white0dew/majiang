@@ -5,10 +5,19 @@ import { ScenarioPanel } from "@/components/scenario-panel";
 import { TileChip } from "@/components/tile-chip";
 import { getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
 import { generateScenario, getQuickAnswerCandidates, getQuickOptionTiles, hasSelfDingQueTiles } from "@/engine/mahjong/scenario";
-import { evaluateDiscardOptions, explainDiscardComparison, quickModeScore } from "@/engine/scoring/decision";
+import {
+  evaluateDiscardOptions,
+  evaluateDiscardOptionsByStyle,
+  explainDiscardComparison,
+  getDiscardScoreFormula,
+  getDiscardDecisionInsight,
+  getDiscardStyleProfile,
+  listDiscardStyleProfiles,
+  quickModeScore,
+} from "@/engine/scoring/decision";
 import { tileIdToLabel } from "@/engine/mahjong/tiles";
 import { saveRecord } from "@/lib/storage/training-store";
-import { DiscardEvaluation, Scenario, TrainingMode, TrainingRuleId } from "@/types/mahjong";
+import { DiscardEvaluation, DiscardPlayStyle, Scenario, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
 const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
   quick: {
@@ -19,6 +28,12 @@ const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
     title: "弃牌模式",
     subtitle: "选择本巡最优弃牌，平衡效率与风险",
   },
+};
+
+type DiscardStyleOption = ReturnType<typeof listDiscardStyleProfiles>[number];
+type DiscardStyleRecommendation = {
+  style: DiscardStyleOption;
+  best: DiscardEvaluation;
 };
 
 function createModeScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
@@ -235,16 +250,17 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
 function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
   const [scenario, resetScenario] = useScenario("discard", ruleId);
   const [pickedDiscard, setPickedDiscard] = useState<number | null>(null);
+  const [playStyle, setPlayStyle] = useState<DiscardPlayStyle>("balanced");
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(0);
   const ruleStrategy = useMemo(() => getTrainingRuleStrategy(ruleId), [ruleId]);
+  const styleOptions = useMemo(() => listDiscardStyleProfiles(), []);
+  const playStyleProfile = useMemo(() => getDiscardStyleProfile(playStyle), [playStyle]);
+  const scoreFormula = useMemo(() => getDiscardScoreFormula(playStyle), [playStyle]);
   const [result, setResult] = useState<
     | {
-        chosen: DiscardEvaluation;
-        best: DiscardEvaluation;
-        correct: boolean;
+        selectedTileId: number;
         elapsedMs: number;
-        comparisonReasons: string[];
       }
     | null
   >(null);
@@ -253,8 +269,23 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
     if (!scenario) {
       return [];
     }
-    return evaluateDiscardOptions(scenario);
-  }, [scenario]);
+    return evaluateDiscardOptions(scenario, playStyle);
+  }, [scenario, playStyle]);
+
+  const styleRecommendations = useMemo(() => {
+    if (!scenario) {
+      return [] as DiscardStyleRecommendation[];
+    }
+
+    const byStyle = evaluateDiscardOptionsByStyle(scenario);
+    return styleOptions.reduce<DiscardStyleRecommendation[]>((acc, style) => {
+      const best = byStyle[style.id][0];
+      if (best) {
+        acc.push({ style, best });
+      }
+      return acc;
+    }, []);
+  }, [scenario, styleOptions]);
 
   useEffect(() => {
     if (!scenario || result) {
@@ -274,6 +305,21 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
   }
 
   const best = evaluations[0];
+  const resultChosen = result
+    ? evaluations.find((item) => item.tileId === result.selectedTileId) ?? null
+    : null;
+  const resultCorrect =
+    resultChosen && best
+      ? resultChosen.tileId === best.tileId ||
+        resultChosen.totalScore >= best.totalScore - playStyleProfile.acceptanceGap
+      : false;
+  const resultComparisonReasons =
+    resultChosen && best ? explainDiscardComparison(best, resultChosen, playStyle) : [];
+  const resultInsight =
+    resultChosen && best ? getDiscardDecisionInsight(best, resultChosen, playStyle) : null;
+  const resultRank = resultChosen
+    ? evaluations.findIndex((item) => item.tileId === resultChosen.tileId) + 1
+    : 0;
 
   function submitChoice(): void {
     if (pickedDiscard === null || !best) {
@@ -285,19 +331,23 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
       return;
     }
 
-    const correct = chosen.tileId === best.tileId || chosen.totalScore >= best.totalScore - 2;
     const finalElapsed = elapsedSince(startedAtRef.current);
-    const comparisonReasons = explainDiscardComparison(best, chosen);
+    const comparisonReasons = explainDiscardComparison(best, chosen, playStyle);
     setElapsedMs(finalElapsed);
-    setResult({ chosen, best, correct, elapsedMs: finalElapsed, comparisonReasons });
+    setResult({ selectedTileId: chosen.tileId, elapsedMs: finalElapsed });
+
+    const correct =
+      chosen.tileId === best.tileId ||
+      chosen.totalScore >= best.totalScore - playStyleProfile.acceptanceGap;
 
     saveRecord({
       mode: "discard",
       ruleId,
+      discardStyle: playStyle,
       correct,
       score: Math.round(chosen.totalScore),
       elapsedMs: finalElapsed,
-      summary: `推荐打 ${tileIdToLabel(best.tileId)}，你打 ${tileIdToLabel(chosen.tileId)}；${comparisonReasons[0]}；耗时 ${(finalElapsed / 1000).toFixed(1)}s`,
+      summary: `${playStyleProfile.label}打法推荐打 ${tileIdToLabel(best.tileId)}，你打 ${tileIdToLabel(chosen.tileId)}；${comparisonReasons[0]}；耗时 ${(finalElapsed / 1000).toFixed(1)}s`,
     });
   }
 
@@ -319,6 +369,42 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
 
       <div className="countdown">当前用时: {(elapsedMs / 1000).toFixed(1)}s</div>
 
+      <div className="discard-style-bar">
+        <p>
+          当前打法：<strong>{playStyleProfile.label}</strong>（{playStyleProfile.description}）
+        </p>
+        <div className="discard-style-actions">
+          {styleOptions.map((style) => (
+            <button
+              className={`btn-ghost discard-style-btn ${playStyle === style.id ? "discard-style-btn--active" : ""}`}
+              key={style.id}
+              onClick={() => setPlayStyle(style.id)}
+              type="button"
+            >
+              {style.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <details className="discard-formula-card">
+        <summary>计分公式与术语说明（展开查看）</summary>
+        <p className="discard-formula-main">{scoreFormula.totalFormula}</p>
+        <ul className="discard-formula-list">
+          {scoreFormula.componentFormulas.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <ul className="discard-term-list">
+          {scoreFormula.termDefinitions.map((item) => (
+            <li key={item.term}>
+              <strong>{item.term}：</strong>
+              {item.explain}
+            </li>
+          ))}
+        </ul>
+      </details>
+
       <ScenarioPanel
         scenario={scenario}
         onPickDiscard={setPickedDiscard}
@@ -337,43 +423,80 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
           </>
         ) : (
           <div className="result-card">
-            <p>
-              你的选择：<strong>{tileIdToLabel(result.chosen.tileId)}</strong>（{result.chosen.totalScore.toFixed(1)}分）
-            </p>
-            <p>
-              推荐选择：<strong>{tileIdToLabel(result.best.tileId)}</strong>（{result.best.totalScore.toFixed(1)}分）
-            </p>
-            <p>
-              {result.correct ? "判断合理" : "建议优化"}：向听 {result.chosen.shantenAfter}，有效进张 {result.chosen.effectiveTiles}，
-              风险 {Math.round(result.chosen.risk * 100)}%
-            </p>
-            <p>耗时：{(result.elapsedMs / 1000).toFixed(1)}s</p>
-            <p>
-              系统判断依据（推荐打 <strong>{tileIdToLabel(result.best.tileId)}</strong>）：
-            </p>
-            <ol className="result-reason-list">
-              {result.comparisonReasons.map((reason, index) => (
-                <li key={`${reason}-${index}`}>{reason}</li>
-              ))}
-            </ol>
-            {result.chosen.reasons.length > 0 ? <p>{result.chosen.reasons.join("；")}</p> : null}
+            {resultChosen && best ? (
+              <>
+                <p>
+                  你的选择：<strong>{tileIdToLabel(resultChosen.tileId)}</strong>（{resultChosen.totalScore.toFixed(1)}分）
+                </p>
+                <p>
+                  推荐选择：<strong>{tileIdToLabel(best.tileId)}</strong>（{best.totalScore.toFixed(1)}分）
+                </p>
+                <p>
+                  当前记分风格：{playStyleProfile.label}
+                </p>
+                <p>
+                  你的三项分：效率 {resultChosen.efficiency.toFixed(1)}，需牌规避 {resultChosen.demandAvoidance.toFixed(1)}，
+                  风险控制 {resultChosen.riskControl.toFixed(1)}
+                </p>
+                <p>
+                  推荐三项分：效率 {best.efficiency.toFixed(1)}，需牌规避 {best.demandAvoidance.toFixed(1)}，风险控制{" "}
+                  {best.riskControl.toFixed(1)}
+                </p>
+                {resultInsight ? (
+                  <>
+                    <p>
+                      <strong>结论：</strong>
+                      {resultInsight.title}
+                    </p>
+                    <p>{resultInsight.gapSummary}</p>
+                    <p>
+                      该打法排名：第 {resultRank}/{evaluations.length}
+                    </p>
+                    <p className="result-score-note">{resultInsight.scoreNote}</p>
+                  </>
+                ) : null}
+                <p>
+                  {resultCorrect ? "该打法下判断合理" : "该打法下建议优化"}：向听 {resultChosen.shantenAfter}，有效进张{" "}
+                  {resultChosen.effectiveTiles}，
+                  风险 {Math.round(resultChosen.risk * 100)}%
+                </p>
+                <p>耗时：{(result.elapsedMs / 1000).toFixed(1)}s</p>
+                <p>
+                  系统判断依据（{playStyleProfile.label}打法推荐打 <strong>{tileIdToLabel(best.tileId)}</strong>）：
+                </p>
+                <ol className="result-reason-list">
+                  {resultComparisonReasons.map((reason, index) => (
+                    <li key={`${reason}-${index}`}>{reason}</li>
+                  ))}
+                </ol>
+                {resultInsight ? (
+                  <>
+                    <p>建议动作：</p>
+                    <ul className="result-action-list">
+                      {resultInsight.actionTips.map((tip) => (
+                        <li key={tip}>{tip}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <p>不同打法参考（同一牌局）：</p>
+                <ul className="discard-style-recommend-list">
+                  {styleRecommendations.map((item) => (
+                    <li key={item.style.id}>
+                      {item.style.label}：打 <strong>{tileIdToLabel(item.best.tileId)}</strong>（{item.best.totalScore.toFixed(1)}分）
+                    </li>
+                  ))}
+                </ul>
+                {resultChosen.reasons.length > 0 ? <p>{resultChosen.reasons.join("；")}</p> : null}
+              </>
+            ) : (
+              <p>当前结果不可用，请直接下一题。</p>
+            )}
             <button className="btn-primary" onClick={nextQuestion} type="button">
               下一题
             </button>
           </div>
         )}
-      </div>
-
-      <div className="score-list">
-        <h3>系统参考（Top 3）</h3>
-        <ol>
-          {evaluations.slice(0, 3).map((item) => (
-            <li key={item.tileId}>
-              打 {tileIdToLabel(item.tileId)} | 总分 {item.totalScore.toFixed(1)} | 效率 {item.efficiency.toFixed(0)} |
-              风险控制 {item.riskControl.toFixed(0)}
-            </li>
-          ))}
-        </ol>
       </div>
     </section>
   );

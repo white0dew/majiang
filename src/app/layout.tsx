@@ -18,7 +18,7 @@ const titleFont = Ma_Shan_Zheng({
 
 export const metadata: Metadata = {
   title: "麻局教练 | 多玩法麻将训练",
-  description: "支持四川血战、长沙将牌、贵州捉鸡等玩法，提升听胡速度与弃牌决策能力。",
+  description: "支持四川、长沙、贵州、厦门、福建、沈阳、杭州、日本、苏州等玩法，提升听胡速度与弃牌决策能力。",
   icons: {
     icon: [{ url: "/icon.png", type: "image/png" }],
     shortcut: [{ url: "/icon.png", type: "image/png" }],

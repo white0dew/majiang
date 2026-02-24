@@ -1,5 +1,6 @@
 import {
-  TILE_KIND_COUNT,
+  NUMBER_TILE_IDS,
+  RIICHI_TILE_IDS,
   drawTiles,
   randomInt,
   suitLabel,
@@ -9,7 +10,6 @@ import { isWinningHandWithJiang258 } from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TRAINING_RULE_IDS, TrainingRuleId } from "@/types/mahjong";
 
 const SUITS: Suit[] = ["wan", "tiao", "tong"];
-const ALL_TILE_IDS = Array.from({ length: TILE_KIND_COUNT }, (_, tileId) => tileId);
 
 export const DEFAULT_TRAINING_RULE_ID: TrainingRuleId = "sichuan-blood-battle";
 
@@ -24,6 +24,7 @@ type SelfContext = {
 
 export type TrainingRuleStrategy = {
   id: TrainingRuleId;
+  tileIds: readonly number[];
   title: string;
   shortLabel: string;
   description: string;
@@ -38,8 +39,40 @@ export type TrainingRuleStrategy = {
   filterQuickOptionTiles: (tileIds: number[], scenario: Scenario) => number[];
 };
 
+function createNoDingQueStrategy(input: {
+  id: TrainingRuleId;
+  tileIds?: readonly number[];
+  title: string;
+  shortLabel: string;
+  description: string;
+  quickSelfHint?: string;
+  discardSelfHint?: string;
+  quickPanelHint?: () => string;
+}): TrainingRuleStrategy {
+  return {
+    id: input.id,
+    tileIds: input.tileIds ?? NUMBER_TILE_IDS,
+    title: input.title,
+    shortLabel: input.shortLabel,
+    description: input.description,
+    usesDingQue: false,
+    quickSelfHint: input.quickSelfHint ?? "请观察牌局并判断当前可胡牌",
+    discardSelfHint: input.discardSelfHint ?? "请选择本巡要打出的牌",
+    quickPanelHint: input.quickPanelHint ?? (() => "本玩法无定缺，候选牌覆盖万/条/筒三门。"),
+    createSelfContext: (counts, handSize) => ({
+      selfHand: drawTiles(counts, handSize),
+      selfDingQue: null,
+    }),
+    createOpponentDingQue: () => null,
+    isSelfHandValid: () => true,
+    filterQuickCandidates: (candidates) => candidates,
+    filterQuickOptionTiles: (tileIds) => tileIds,
+  };
+}
+
 const sichuanBloodBattleStrategy: TrainingRuleStrategy = {
   id: "sichuan-blood-battle",
+  tileIds: NUMBER_TILE_IDS,
   title: "四川麻将（血战到底）",
   shortLabel: "四川血战",
   description: "有定缺，重点练听胡反应和弃牌风险控制。",
@@ -67,27 +100,16 @@ const sichuanBloodBattleStrategy: TrainingRuleStrategy = {
       : tileIds,
 };
 
-const guizhouZhuojiStrategy: TrainingRuleStrategy = {
+const guizhouZhuojiStrategy = createNoDingQueStrategy({
   id: "guizhou-zhuoji",
   title: "贵州麻将（捉鸡）",
   shortLabel: "贵州捉鸡",
   description: "无定缺，重点练胡牌效率和鸡牌收益前的风险判断。",
-  usesDingQue: false,
-  quickSelfHint: "请观察牌局并判断当前可胡牌",
-  discardSelfHint: "请选择本巡要打出的牌",
-  quickPanelHint: () => "本玩法无定缺，候选牌覆盖万/条/筒三门。",
-  createSelfContext: (counts, handSize) => ({
-    selfHand: drawTiles(counts, handSize),
-    selfDingQue: null,
-  }),
-  createOpponentDingQue: () => null,
-  isSelfHandValid: () => true,
-  filterQuickCandidates: (candidates) => candidates,
-  filterQuickOptionTiles: (tileIds) => tileIds,
-};
+});
 
 const changshaJiangStrategy: TrainingRuleStrategy = {
   id: "changsha-258-jiang",
+  tileIds: NUMBER_TILE_IDS,
   title: "长沙麻将（258 将）",
   shortLabel: "长沙将牌",
   description: "无定缺，快答按 258 将规则判断可胡牌。",
@@ -106,10 +128,60 @@ const changshaJiangStrategy: TrainingRuleStrategy = {
   filterQuickOptionTiles: (tileIds) => tileIds,
 };
 
+const xiamenStrategy = createNoDingQueStrategy({
+  id: "xiamen-mahjong",
+  title: "厦门麻将",
+  shortLabel: "厦门",
+  description: "无定缺，当前先按通用胡牌效率训练，后续可叠加本地细则。",
+});
+
+const fujianStrategy = createNoDingQueStrategy({
+  id: "fujian-mahjong",
+  title: "福建麻将",
+  shortLabel: "福建",
+  description: "无定缺，当前先按通用局面训练，重点练进张与风险平衡。",
+});
+
+const shenyangStrategy = createNoDingQueStrategy({
+  id: "shenyang-mahjong",
+  title: "沈阳麻将",
+  shortLabel: "沈阳",
+  description: "无定缺，当前先练基础听胡与弃牌决策，后续可接入地方规则。",
+});
+
+const hangzhouStrategy = createNoDingQueStrategy({
+  id: "hangzhou-mahjong",
+  title: "杭州麻将",
+  shortLabel: "杭州",
+  description: "无定缺，当前先按通用训练题生成，优先提升牌效率与防守。",
+});
+
+const japaneseRiichiStrategy = createNoDingQueStrategy({
+  id: "japanese-riichi",
+  tileIds: RIICHI_TILE_IDS,
+  title: "日本麻将（立直）",
+  shortLabel: "日本立直",
+  description: "无定缺，使用万/条/筒 + 东南西北中发白训练（暂不含赤宝牌与完整役种校验）。",
+  quickPanelHint: () => "当前立直训练含字牌（东南西北中发白），暂不含赤宝牌。",
+});
+
+const suzhouStrategy = createNoDingQueStrategy({
+  id: "suzhou-mahjong",
+  title: "苏州麻将",
+  shortLabel: "苏州",
+  description: "无定缺，当前先按通用决策训练，后续可补苏州本地细则。",
+});
+
 export const TRAINING_RULE_STRATEGIES: Record<TrainingRuleId, TrainingRuleStrategy> = {
   "sichuan-blood-battle": sichuanBloodBattleStrategy,
   "changsha-258-jiang": changshaJiangStrategy,
   "guizhou-zhuoji": guizhouZhuojiStrategy,
+  "xiamen-mahjong": xiamenStrategy,
+  "fujian-mahjong": fujianStrategy,
+  "shenyang-mahjong": shenyangStrategy,
+  "hangzhou-mahjong": hangzhouStrategy,
+  "japanese-riichi": japaneseRiichiStrategy,
+  "suzhou-mahjong": suzhouStrategy,
 };
 
 export function isTrainingRuleId(value: string): value is TrainingRuleId {
@@ -133,5 +205,5 @@ export function listTrainingRuleStrategies(): TrainingRuleStrategy[] {
 
 export function getQuickOptionTilesByRule(scenario: Scenario): number[] {
   const strategy = getTrainingRuleStrategy(scenario.ruleId);
-  return strategy.filterQuickOptionTiles(ALL_TILE_IDS, scenario);
+  return strategy.filterQuickOptionTiles([...strategy.tileIds], scenario);
 }

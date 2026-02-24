@@ -2,7 +2,19 @@ export type Suit = "wan" | "tiao" | "tong";
 
 export const TRAINING_MODES = ["quick", "discard"] as const;
 export type TrainingMode = (typeof TRAINING_MODES)[number];
-export const TRAINING_RULE_IDS = ["sichuan-blood-battle", "changsha-258-jiang", "guizhou-zhuoji"] as const;
+export const DISCARD_PLAY_STYLES = ["balanced", "aggressive", "steady"] as const;
+export type DiscardPlayStyle = (typeof DISCARD_PLAY_STYLES)[number];
+export const TRAINING_RULE_IDS = [
+  "sichuan-blood-battle",
+  "changsha-258-jiang",
+  "guizhou-zhuoji",
+  "xiamen-mahjong",
+  "fujian-mahjong",
+  "shenyang-mahjong",
+  "hangzhou-mahjong",
+  "japanese-riichi",
+  "suzhou-mahjong",
+] as const;
 export type TrainingRuleId = (typeof TRAINING_RULE_IDS)[number];
 
 export type OpponentState = {
@@ -38,6 +50,7 @@ export type TrainingRecord = {
   id: string;
   mode: TrainingMode;
   ruleId: TrainingRuleId;
+  discardStyle?: DiscardPlayStyle;
   correct: boolean;
   score: number;
   elapsedMs?: number;

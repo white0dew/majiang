@@ -1,7 +1,17 @@
-import { TRAINING_MODES, TRAINING_RULE_IDS, TrainingMode, TrainingRecord, TrainingRuleId } from "@/types/mahjong";
+import {
+  DISCARD_PLAY_STYLES,
+  TRAINING_MODES,
+  TRAINING_RULE_IDS,
+  TrainingMode,
+  TrainingRecord,
+  TrainingRuleId,
+} from "@/types/mahjong";
 
 const STORAGE_KEY = "majiang-trainer-records-v1";
 const DEFAULT_RULE_ID: TrainingRuleId = "sichuan-blood-battle";
+const LEGACY_RULE_ALIAS: Record<string, TrainingRuleId> = {
+  "guiyang-zhuoji": "guizhou-zhuoji",
+};
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined";
@@ -15,6 +25,10 @@ function isTrainingRuleId(value: string): value is TrainingRuleId {
   return (TRAINING_RULE_IDS as readonly string[]).includes(value);
 }
 
+function isDiscardPlayStyle(value: string): value is NonNullable<TrainingRecord["discardStyle"]> {
+  return (DISCARD_PLAY_STYLES as readonly string[]).includes(value);
+}
+
 function normalizeRecord(input: unknown): TrainingRecord | null {
   if (typeof input !== "object" || input === null) {
     return null;
@@ -26,6 +40,8 @@ function normalizeRecord(input: unknown): TrainingRecord | null {
     !isTrainingMode(item.mode) ||
     typeof item.score !== "number" ||
     typeof item.correct !== "boolean" ||
+    (typeof item.discardStyle !== "undefined" &&
+      (typeof item.discardStyle !== "string" || !isDiscardPlayStyle(item.discardStyle))) ||
     (typeof item.elapsedMs !== "undefined" && typeof item.elapsedMs !== "number") ||
     typeof item.summary !== "string" ||
     typeof item.id !== "string" ||
@@ -34,15 +50,14 @@ function normalizeRecord(input: unknown): TrainingRecord | null {
     return null;
   }
 
-  const ruleId =
-    typeof item.ruleId === "string" && isTrainingRuleId(item.ruleId)
-      ? item.ruleId
-      : DEFAULT_RULE_ID;
+  const normalizedRuleId = typeof item.ruleId === "string" ? (LEGACY_RULE_ALIAS[item.ruleId] ?? item.ruleId) : "";
+  const ruleId = isTrainingRuleId(normalizedRuleId) ? normalizedRuleId : DEFAULT_RULE_ID;
 
   return {
     id: item.id,
     mode: item.mode,
     ruleId,
+    discardStyle: item.discardStyle,
     correct: item.correct,
     score: item.score,
     elapsedMs: item.elapsedMs,

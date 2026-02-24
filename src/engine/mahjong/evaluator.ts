@@ -1,4 +1,4 @@
-import { TILE_KIND_COUNT, countTiles } from "@/engine/mahjong/tiles";
+import { TILE_KIND_COUNT, countTiles, isNumberTile } from "@/engine/mahjong/tiles";
 
 function suitIndex(tileId: number): number {
   return Math.floor(tileId / 9);
@@ -9,11 +9,28 @@ function rank(tileId: number): number {
 }
 
 function isJiangRank(tileId: number): boolean {
+  if (!isNumberTile(tileId)) {
+    return false;
+  }
   const tileRank = rank(tileId);
   return tileRank === 2 || tileRank === 5 || tileRank === 8;
 }
 
+type ShantenOptions = {
+  restrictJiang258Pair?: boolean;
+};
+
+function canUseAsPair(tileId: number, options?: ShantenOptions): boolean {
+  if (!options?.restrictJiang258Pair) {
+    return true;
+  }
+  return isJiangRank(tileId);
+}
+
 function canSequence(counts: number[], tileId: number): boolean {
+  if (!isNumberTile(tileId) || !isNumberTile(tileId + 2)) {
+    return false;
+  }
   const r = rank(tileId);
   if (r > 7) {
     return false;
@@ -27,6 +44,9 @@ function canSequence(counts: number[], tileId: number): boolean {
 }
 
 function canAdjacent(counts: number[], tileId: number): boolean {
+  if (!isNumberTile(tileId) || !isNumberTile(tileId + 1)) {
+    return false;
+  }
   const r = rank(tileId);
   if (r > 8) {
     return false;
@@ -35,6 +55,9 @@ function canAdjacent(counts: number[], tileId: number): boolean {
 }
 
 function canGap(counts: number[], tileId: number): boolean {
+  if (!isNumberTile(tileId) || !isNumberTile(tileId + 2)) {
+    return false;
+  }
   const r = rank(tileId);
   if (r > 7) {
     return false;
@@ -146,7 +169,7 @@ export function isWinningHandWithJiang258(tiles: number[]): boolean {
   return false;
 }
 
-function standardShanten(counts: number[]): number {
+function standardShanten(counts: number[], options?: ShantenOptions): number {
   let best = 8;
 
   function dfs(start: number, melds: number, pairs: number, taatsu: number): void {
@@ -181,7 +204,7 @@ function standardShanten(counts: number[]): number {
     }
 
     if (counts[idx] >= 2) {
-      if (pairs < 1) {
+      if (pairs < 1 && canUseAsPair(idx, options)) {
         counts[idx] -= 2;
         dfs(idx, melds, pairs + 1, taatsu);
         counts[idx] += 2;
@@ -233,10 +256,30 @@ function sevenPairsShanten(counts: number[]): number {
   return 6 - pairKinds + Math.max(0, 7 - uniqueKinds);
 }
 
+function sevenPairsShantenWithJiang258(counts: number[]): number {
+  let hasJiangPair = false;
+  for (let id = 0; id < TILE_KIND_COUNT; id += 1) {
+    if (counts[id] >= 2 && isJiangRank(id)) {
+      hasJiangPair = true;
+      break;
+    }
+  }
+
+  const base = sevenPairsShanten(counts);
+  return hasJiangPair ? base : base + 1;
+}
+
 export function estimateShanten(tiles: number[]): number {
   const counts = countTiles(tiles);
   const normal = standardShanten(counts.slice());
   const sevenPairs = tiles.length >= 13 ? sevenPairsShanten(counts.slice()) : 8;
+  return Math.max(-1, Math.min(normal, sevenPairs));
+}
+
+export function estimateShantenWithJiang258(tiles: number[]): number {
+  const counts = countTiles(tiles);
+  const normal = standardShanten(counts.slice(), { restrictJiang258Pair: true });
+  const sevenPairs = tiles.length >= 13 ? sevenPairsShantenWithJiang258(counts.slice()) : 8;
   return Math.max(-1, Math.min(normal, sevenPairs));
 }
 
@@ -256,11 +299,12 @@ export function getWinningTileCandidates(
   return result;
 }
 
-export function getEffectiveTileInfo(
+function getEffectiveTileInfoByEstimator(
   hand: number[],
+  estimateFn: (tiles: number[]) => number,
   remainingCounts?: number[],
 ): { typeCount: number; copyCount: number; improvingTiles: number[] } {
-  const base = estimateShanten(hand);
+  const base = estimateFn(hand);
   const improvingTiles: number[] = [];
   let copyCount = 0;
 
@@ -270,7 +314,7 @@ export function getEffectiveTileInfo(
       continue;
     }
 
-    const shanten = estimateShanten(hand.concat(id));
+    const shanten = estimateFn(hand.concat(id));
     if (shanten < base) {
       improvingTiles.push(id);
       copyCount += available;
@@ -282,4 +326,18 @@ export function getEffectiveTileInfo(
     copyCount,
     improvingTiles,
   };
+}
+
+export function getEffectiveTileInfo(
+  hand: number[],
+  remainingCounts?: number[],
+): { typeCount: number; copyCount: number; improvingTiles: number[] } {
+  return getEffectiveTileInfoByEstimator(hand, estimateShanten, remainingCounts);
+}
+
+export function getEffectiveTileInfoWithJiang258(
+  hand: number[],
+  remainingCounts?: number[],
+): { typeCount: number; copyCount: number; improvingTiles: number[] } {
+  return getEffectiveTileInfoByEstimator(hand, estimateShantenWithJiang258, remainingCounts);
 }
