@@ -30,6 +30,9 @@ const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
   },
 };
 
+const MOBILE_MAX_WIDTH = 900;
+const LANDSCAPE_TOAST_DURATION_MS = 10000;
+
 type DiscardStyleOption = ReturnType<typeof listDiscardStyleProfiles>[number];
 type DiscardStyleRecommendation = {
   style: DiscardStyleOption;
@@ -47,12 +50,56 @@ function createModeScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenari
   return scenario;
 }
 
-export function TrainingModeClient({ mode, ruleId }: { mode: TrainingMode; ruleId: TrainingRuleId }) {
-  if (mode === "quick") {
-    return <QuickMode ruleId={ruleId} />;
+function shouldRemindLandscape(): boolean {
+  if (typeof window === "undefined") {
+    return false;
   }
 
-  return <DiscardMode ruleId={ruleId} />;
+  const isMobile = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches;
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+  return isMobile && isCoarsePointer && !isLandscape;
+}
+
+function LandscapeReminderToast() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!shouldRemindLandscape()) {
+      return;
+    }
+
+    const showTimer = window.setTimeout(() => {
+      setVisible(true);
+    }, 0);
+    const hideTimer = window.setTimeout(() => {
+      setVisible(false);
+    }, LANDSCAPE_TOAST_DURATION_MS);
+
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, []);
+
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <p className="orientation-toast" role="status" aria-live="polite">
+      建议切换为手机横屏，牌桌信息会更完整。
+    </p>
+  );
+}
+
+export function TrainingModeClient({ mode, ruleId }: { mode: TrainingMode; ruleId: TrainingRuleId }) {
+  return (
+    <>
+      <LandscapeReminderToast key={`${mode}-${ruleId}`} />
+      {mode === "quick" ? <QuickMode ruleId={ruleId} /> : <DiscardMode ruleId={ruleId} />}
+    </>
+  );
 }
 
 function useScenario(mode: TrainingMode, ruleId: TrainingRuleId): [Scenario | null, () => void] {
