@@ -1,15 +1,24 @@
 import {
+  FA_TILE_ID,
   NUMBER_TILE_IDS,
   RIICHI_TILE_IDS,
+  ZHONG_TILE_ID,
   drawTiles,
   randomInt,
   suitLabel,
   tileIdToSuit,
 } from "@/engine/mahjong/tiles";
-import { isWinningHandWithJiang258 } from "@/engine/mahjong/evaluator";
+import {
+  isWinningHandWithHainanHaikou,
+  isWinningHandWithJiang258,
+  isWinningHandWithWuhanLaiziJiang258,
+} from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TRAINING_RULE_IDS, TrainingRuleId } from "@/types/mahjong";
 
 const SUITS: Suit[] = ["wan", "tiao", "tong"];
+export const GUANGDONG_TILE_IDS = [...NUMBER_TILE_IDS, ZHONG_TILE_ID] as const;
+export const WUHAN_TILE_IDS = [...NUMBER_TILE_IDS, ZHONG_TILE_ID, FA_TILE_ID] as const;
+export const HAINAN_TILE_IDS = [...RIICHI_TILE_IDS] as const;
 
 export const DEFAULT_TRAINING_RULE_ID: TrainingRuleId = "sichuan-blood-battle";
 
@@ -107,11 +116,43 @@ const guizhouZhuojiStrategy = createNoDingQueStrategy({
   description: "无定缺，重点练胡牌效率和鸡牌收益前的风险判断。",
 });
 
+const guangdongHongzhongStrategy = createNoDingQueStrategy({
+  id: "guangdong-hongzhong",
+  tileIds: GUANGDONG_TILE_IDS,
+  title: "广东麻将（红中赖子）",
+  shortLabel: "广东红中",
+  description: "无定缺，红中作赖子，侧重听牌速度与弃牌安全感。",
+  quickSelfHint: "请观察牌局并判断当前可胡牌（红中可当赖子）",
+  discardSelfHint: "请选择本巡要打出的牌（红中可当赖子）",
+  quickPanelHint: () => "当前按广东红中赖子训练：牌池为万/条/筒 + 红中。",
+});
+
+const wuhanHongzhongFaLaiziGangStrategy: TrainingRuleStrategy = {
+  id: "wuhan-hongzhong-fa-laizi-gang",
+  tileIds: WUHAN_TILE_IDS,
+  title: "武汉麻将（红中发财赖子杠）",
+  shortLabel: "武汉赖子杠",
+  description: "无定缺，按大众口径训练：红中/发财作赖子，胡牌将牌需满足 2/5/8。",
+  usesDingQue: false,
+  quickSelfHint: "请观察牌局并判断当前可胡牌（红中/发财可作赖子，且将牌需为 2/5/8）",
+  discardSelfHint: "请选择本巡要打出的牌（红中/发财可作赖子，且将牌需为 2/5/8）",
+  quickPanelHint: () => "当前按武汉大众口径训练：牌池为万/条/筒 + 红中 + 发财，胡牌将牌需满足 2/5/8。",
+  createSelfContext: (counts, handSize) => ({
+    selfHand: drawTiles(counts, handSize),
+    selfDingQue: null,
+  }),
+  createOpponentDingQue: () => null,
+  isSelfHandValid: () => true,
+  filterQuickCandidates: (candidates, scenario) =>
+    candidates.filter((tileId) => isWinningHandWithWuhanLaiziJiang258(scenario.selfHand.concat(tileId))),
+  filterQuickOptionTiles: (tileIds) => tileIds,
+};
+
 const changshaJiangStrategy: TrainingRuleStrategy = {
   id: "changsha-258-jiang",
   tileIds: NUMBER_TILE_IDS,
   title: "长沙麻将（258 将）",
-  shortLabel: "长沙将牌",
+  shortLabel: "长沙将牌（258 将）",
   description: "无定缺，快答按 258 将规则判断可胡牌。",
   usesDingQue: false,
   quickSelfHint: "请观察牌局并判断当前可胡牌（将牌需为 2/5/8）",
@@ -145,16 +186,44 @@ const fujianStrategy = createNoDingQueStrategy({
 const shenyangStrategy = createNoDingQueStrategy({
   id: "shenyang-mahjong",
   title: "沈阳麻将",
-  shortLabel: "沈阳",
+  shortLabel: "沈阳麻将",
   description: "无定缺，当前先练基础听胡与弃牌决策，后续可接入地方规则。",
+});
+
+const hebeiStrategy = createNoDingQueStrategy({
+  id: "hebei-mahjong",
+  title: "河北麻将（推倒胡）",
+  shortLabel: "河北麻将（推倒胡）",
+  description: "常见推倒胡口径：无定缺，先练听牌速度与后盘防点炮。",
 });
 
 const hangzhouStrategy = createNoDingQueStrategy({
   id: "hangzhou-mahjong",
   title: "杭州麻将",
-  shortLabel: "杭州",
+  shortLabel: "杭州麻将",
   description: "无定缺，当前先按通用训练题生成，优先提升牌效率与防守。",
 });
+
+const hainanStrategy: TrainingRuleStrategy = {
+  id: "hainan-mahjong",
+  tileIds: HAINAN_TILE_IDS,
+  title: "海南麻将（海口版）",
+  shortLabel: "海南海口",
+  description: "按海口大众口径训练：含字牌，普通胡牌需满足至少 1 番（训练近似）。",
+  usesDingQue: false,
+  quickSelfHint: "请观察牌局并判断当前可胡牌（海口版：普通胡牌需有番）",
+  discardSelfHint: "请选择本巡要打出的牌（海口版：兼顾有番门槛）",
+  quickPanelHint: () => "当前按海南海口版训练：牌池含东南西北中发白，普通胡牌需至少 1 番。",
+  createSelfContext: (counts, handSize) => ({
+    selfHand: drawTiles(counts, handSize),
+    selfDingQue: null,
+  }),
+  createOpponentDingQue: () => null,
+  isSelfHandValid: () => true,
+  filterQuickCandidates: (candidates, scenario) =>
+    candidates.filter((tileId) => isWinningHandWithHainanHaikou(scenario.selfHand.concat(tileId))),
+  filterQuickOptionTiles: (tileIds) => tileIds,
+};
 
 const japaneseRiichiStrategy = createNoDingQueStrategy({
   id: "japanese-riichi",
@@ -168,18 +237,22 @@ const japaneseRiichiStrategy = createNoDingQueStrategy({
 const suzhouStrategy = createNoDingQueStrategy({
   id: "suzhou-mahjong",
   title: "苏州麻将",
-  shortLabel: "苏州",
+  shortLabel: "苏州麻将",
   description: "无定缺，当前先按通用决策训练，后续可补苏州本地细则。",
 });
 
 export const TRAINING_RULE_STRATEGIES: Record<TrainingRuleId, TrainingRuleStrategy> = {
   "sichuan-blood-battle": sichuanBloodBattleStrategy,
   "changsha-258-jiang": changshaJiangStrategy,
+  "wuhan-hongzhong-fa-laizi-gang": wuhanHongzhongFaLaiziGangStrategy,
   "guizhou-zhuoji": guizhouZhuojiStrategy,
+  "guangdong-hongzhong": guangdongHongzhongStrategy,
   "xiamen-mahjong": xiamenStrategy,
   "fujian-mahjong": fujianStrategy,
   "shenyang-mahjong": shenyangStrategy,
+  "hebei-mahjong": hebeiStrategy,
   "hangzhou-mahjong": hangzhouStrategy,
+  "hainan-mahjong": hainanStrategy,
   "japanese-riichi": japaneseRiichiStrategy,
   "suzhou-mahjong": suzhouStrategy,
 };

@@ -25,7 +25,7 @@ export default function Home() {
         <p className="hero-kicker">多玩法麻将决策训练</p>
         <h1>麻局教练</h1>
         <p>
-          支持四川、长沙、贵州、厦门、福建、沈阳、杭州、日本、苏州等玩法训练，专注提升大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
+          支持四川、长沙、武汉、贵州、广东、厦门、福建、沈阳、河北、杭州、海南、日本、苏州等玩法训练，专注提升大局观与决策速度。不是对战平台，而是针对实战弱点的训练工具。
         </p>
         <div className="hero-actions">
           <Link className="btn-primary" href="/training">

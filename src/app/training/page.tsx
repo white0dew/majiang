@@ -5,14 +5,14 @@ const modes = [
   {
     mode: "quick",
     title: "快答模式",
-    desc: "识别可胡牌并记录耗时，专练听胡反应。",
-    action: "进入快答",
+    desc: "识别当前牌面是否可胡牌并记录耗时，专练听胡反应。",
+    action: "进入快答模式",
   },
   {
     mode: "discard",
     title: "弃牌模式",
-    desc: "单巡最优弃牌，平衡效率与风险。",
-    action: "进入弃牌",
+    desc: "单巡最优弃牌，看看当前牌局应该打什么牌！",
+    action: "进入弃牌模式",
   },
 ] as const;
 

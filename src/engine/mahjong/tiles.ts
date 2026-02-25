@@ -15,6 +15,13 @@ const HONOR_TILE_META = [
 export const NUMBER_TILE_KIND_COUNT = 27;
 export const HONOR_TILE_KIND_COUNT = 7;
 export const TILE_KIND_COUNT = NUMBER_TILE_KIND_COUNT + HONOR_TILE_KIND_COUNT;
+export const DONG_TILE_ID = NUMBER_TILE_KIND_COUNT;
+export const NAN_TILE_ID = NUMBER_TILE_KIND_COUNT + 1;
+export const XI_TILE_ID = NUMBER_TILE_KIND_COUNT + 2;
+export const BEI_TILE_ID = NUMBER_TILE_KIND_COUNT + 3;
+export const ZHONG_TILE_ID = NUMBER_TILE_KIND_COUNT + 4;
+export const FA_TILE_ID = NUMBER_TILE_KIND_COUNT + 5;
+export const BAIBAN_TILE_ID = NUMBER_TILE_KIND_COUNT + 6;
 export const NUMBER_TILE_IDS = Array.from({ length: NUMBER_TILE_KIND_COUNT }, (_, tileId) => tileId);
 export const RIICHI_TILE_IDS = Array.from({ length: TILE_KIND_COUNT }, (_, tileId) => tileId);
 export const TILE_IMAGE_BASE = "/tiles";

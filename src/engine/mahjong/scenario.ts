@@ -10,10 +10,19 @@ import {
 import { getQuickOptionTilesByRule, getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
 import {
   estimateShanten,
+  estimateShantenWithHainanHaikou,
+  estimateShantenWithHongzhongLaizi,
+  estimateShantenWithWuhanLaiziJiang258,
   estimateShantenWithJiang258,
   getEffectiveTileInfo,
+  getEffectiveTileInfoWithHainanHaikou,
+  getEffectiveTileInfoWithHongzhongLaizi,
+  getEffectiveTileInfoWithWuhanLaiziJiang258,
   getEffectiveTileInfoWithJiang258,
   getWinningTileCandidates,
+  getWinningTileCandidatesWithHainanHaikou,
+  getWinningTileCandidatesWithHongzhongLaizi,
+  getWinningTileCandidatesWithWuhanLaiziJiang258,
 } from "@/engine/mahjong/evaluator";
 import { Scenario, Suit, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
@@ -98,7 +107,26 @@ function createRawScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario
 
 export function getQuickAnswerCandidates(scenario: Scenario): number[] {
   const strategy = getTrainingRuleStrategy(scenario.ruleId);
-  const waits = getWinningTileCandidates(scenario.selfHand, scenario.remainingCounts);
+  const waits =
+    scenario.ruleId === "guangdong-hongzhong"
+      ? getWinningTileCandidatesWithHongzhongLaizi(
+          scenario.selfHand,
+          scenario.remainingCounts,
+          strategy.tileIds,
+        )
+      : scenario.ruleId === "wuhan-hongzhong-fa-laizi-gang"
+        ? getWinningTileCandidatesWithWuhanLaiziJiang258(
+            scenario.selfHand,
+            scenario.remainingCounts,
+            strategy.tileIds,
+          )
+      : scenario.ruleId === "hainan-mahjong"
+        ? getWinningTileCandidatesWithHainanHaikou(
+            scenario.selfHand,
+            scenario.remainingCounts,
+            strategy.tileIds,
+          )
+      : getWinningTileCandidates(scenario.selfHand, scenario.remainingCounts);
   return strategy.filterQuickCandidates(waits, scenario);
 }
 
@@ -133,7 +161,6 @@ function quickModeValid(scenario: Scenario): boolean {
 
 function discardModeValid(scenario: Scenario): boolean {
   const strategy = getTrainingRuleStrategy(scenario.ruleId);
-  const useJiang258 = scenario.ruleId === "changsha-258-jiang";
   if (!strategy.isSelfHandValid(scenario)) {
     return false;
   }
@@ -148,10 +175,26 @@ function discardModeValid(scenario: Scenario): boolean {
 
   const scores = options.map((tileId) => {
     const next = removeTileOnce(scenario.selfHand, tileId);
-    const shanten = useJiang258 ? estimateShantenWithJiang258(next) : estimateShanten(next);
-    const effective = useJiang258
-      ? getEffectiveTileInfoWithJiang258(next, scenario.remainingCounts).copyCount
-      : getEffectiveTileInfo(next, scenario.remainingCounts).copyCount;
+    const shanten =
+      scenario.ruleId === "changsha-258-jiang"
+        ? estimateShantenWithJiang258(next)
+        : scenario.ruleId === "guangdong-hongzhong"
+          ? estimateShantenWithHongzhongLaizi(next)
+          : scenario.ruleId === "wuhan-hongzhong-fa-laizi-gang"
+            ? estimateShantenWithWuhanLaiziJiang258(next)
+            : scenario.ruleId === "hainan-mahjong"
+              ? estimateShantenWithHainanHaikou(next)
+          : estimateShanten(next);
+    const effective =
+      scenario.ruleId === "changsha-258-jiang"
+        ? getEffectiveTileInfoWithJiang258(next, scenario.remainingCounts).copyCount
+        : scenario.ruleId === "guangdong-hongzhong"
+          ? getEffectiveTileInfoWithHongzhongLaizi(next, scenario.remainingCounts).copyCount
+          : scenario.ruleId === "wuhan-hongzhong-fa-laizi-gang"
+            ? getEffectiveTileInfoWithWuhanLaiziJiang258(next, scenario.remainingCounts).copyCount
+            : scenario.ruleId === "hainan-mahjong"
+              ? getEffectiveTileInfoWithHainanHaikou(next, scenario.remainingCounts).copyCount
+          : getEffectiveTileInfo(next, scenario.remainingCounts).copyCount;
     return 20 - shanten * 4 + effective * 0.35;
   });
 

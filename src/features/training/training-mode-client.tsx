@@ -16,8 +16,19 @@ import {
   quickModeScore,
 } from "@/engine/scoring/decision";
 import { tileIdToLabel } from "@/engine/mahjong/tiles";
-import { saveRecord } from "@/lib/storage/training-store";
-import { DiscardEvaluation, DiscardPlayStyle, Scenario, TrainingMode, TrainingRuleId } from "@/types/mahjong";
+import {
+  addMistakeScenario,
+  cloneScenario,
+  getScenarioId,
+  loadFavoriteScenarios,
+  loadMistakeScenarios,
+  removeFavoriteScenario,
+  removeMistakeScenario,
+  saveRecord,
+  StoredScenarioQuestion,
+  toggleFavoriteScenario,
+} from "@/lib/storage/training-store";
+import { DiscardEvaluation, DiscardMetricBreakdown, DiscardPlayStyle, Scenario, TrainingMode, TrainingRuleId } from "@/types/mahjong";
 
 const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
   quick: {
@@ -31,12 +42,17 @@ const modeText: Record<TrainingMode, { title: string; subtitle: string }> = {
 };
 
 const MOBILE_MAX_WIDTH = 900;
-const LANDSCAPE_TOAST_DURATION_MS = 10000;
 
 type DiscardStyleOption = ReturnType<typeof listDiscardStyleProfiles>[number];
 type DiscardStyleRecommendation = {
   style: DiscardStyleOption;
   best: DiscardEvaluation;
+};
+
+const SEAT_LABEL: Record<Scenario["opponents"][number]["seat"], string> = {
+  left: "左家",
+  across: "上家",
+  right: "右家",
 };
 
 function createModeScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenario {
@@ -50,7 +66,7 @@ function createModeScenario(mode: TrainingMode, ruleId: TrainingRuleId): Scenari
   return scenario;
 }
 
-function shouldRemindLandscape(): boolean {
+function shouldForceLandscape(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
@@ -61,48 +77,82 @@ function shouldRemindLandscape(): boolean {
   return isMobile && isCoarsePointer && !isLandscape;
 }
 
-function LandscapeReminderToast() {
-  const [visible, setVisible] = useState(false);
+function listenMediaChange(media: MediaQueryList, listener: () => void): () => void {
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }
+
+  media.addListener(listener);
+  return () => media.removeListener(listener);
+}
+
+function LandscapeRequiredOverlay() {
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
-    if (!shouldRemindLandscape()) {
-      return;
-    }
+    const syncBlockedState = () => setBlocked(shouldForceLandscape());
+    syncBlockedState();
 
-    const showTimer = window.setTimeout(() => {
-      setVisible(true);
-    }, 0);
-    const hideTimer = window.setTimeout(() => {
-      setVisible(false);
-    }, LANDSCAPE_TOAST_DURATION_MS);
+    const mobileQuery = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`);
+    const pointerQuery = window.matchMedia("(pointer: coarse)");
+    const orientationQuery = window.matchMedia("(orientation: landscape)");
+    const offMobile = listenMediaChange(mobileQuery, syncBlockedState);
+    const offPointer = listenMediaChange(pointerQuery, syncBlockedState);
+    const offOrientation = listenMediaChange(orientationQuery, syncBlockedState);
+    window.addEventListener("resize", syncBlockedState);
+    window.addEventListener("orientationchange", syncBlockedState);
 
     return () => {
-      window.clearTimeout(showTimer);
-      window.clearTimeout(hideTimer);
+      offMobile();
+      offPointer();
+      offOrientation();
+      window.removeEventListener("resize", syncBlockedState);
+      window.removeEventListener("orientationchange", syncBlockedState);
     };
   }, []);
 
-  if (!visible) {
+  useEffect(() => {
+    if (blocked) {
+      document.body.classList.add("orientation-locked");
+      return () => {
+        document.body.classList.remove("orientation-locked");
+      };
+    }
+
+    document.body.classList.remove("orientation-locked");
+    return () => {
+      document.body.classList.remove("orientation-locked");
+    };
+  }, [blocked]);
+
+  if (!blocked) {
     return null;
   }
 
   return (
-    <p className="orientation-toast" role="status" aria-live="polite">
-      建议切换为手机横屏，牌桌信息会更完整。
-    </p>
+    <div className="orientation-lock-overlay" role="alertdialog" aria-modal="true" aria-live="assertive">
+      <div className="orientation-lock-card">
+        <h2>请切换为横屏</h2>
+        <p>训练模式仅支持手机横屏，切换后将自动继续。</p>
+      </div>
+    </div>
   );
 }
 
 export function TrainingModeClient({ mode, ruleId }: { mode: TrainingMode; ruleId: TrainingRuleId }) {
   return (
     <>
-      <LandscapeReminderToast key={`${mode}-${ruleId}`} />
+      <LandscapeRequiredOverlay key={`${mode}-${ruleId}`} />
       {mode === "quick" ? <QuickMode ruleId={ruleId} /> : <DiscardMode ruleId={ruleId} />}
     </>
   );
 }
 
-function useScenario(mode: TrainingMode, ruleId: TrainingRuleId): [Scenario | null, () => void] {
+function useScenario(
+  mode: TrainingMode,
+  ruleId: TrainingRuleId,
+): [Scenario | null, () => void, (scenario: Scenario) => void] {
   const [scenario, setScenario] = useState<Scenario | null>(null);
 
   useEffect(() => {
@@ -114,6 +164,9 @@ function useScenario(mode: TrainingMode, ruleId: TrainingRuleId): [Scenario | nu
     () => {
       setScenario(createModeScenario(mode, ruleId));
     },
+    (nextScenario) => {
+      setScenario(cloneScenario(nextScenario));
+    },
   ];
 }
 
@@ -124,13 +177,174 @@ function elapsedSince(startedAt: number): number {
   return Math.max(0, Date.now() - startedAt);
 }
 
+function formatSignedPercentage(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${(value * 100).toFixed(1)}%`;
+}
+
+function renderMetricBreakdown(detail: DiscardMetricBreakdown): JSX.Element {
+  return (
+    <div className="metric-breakdown">
+      <p className="metric-breakdown-formula">{detail.formula}</p>
+      <ul>
+        <li>基础分：{detail.baseScore.toFixed(1)}</li>
+        {detail.penaltyTerms.map((item) => (
+          <li key={item.label}>- {item.label}：{item.value.toFixed(1)}</li>
+        ))}
+        {detail.bonusTerms.map((item) => (
+          <li key={item.label}>+ {item.label}：{item.value.toFixed(1)}</li>
+        ))}
+        <li>
+          <strong>结果：{detail.finalScore.toFixed(1)}</strong>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+function DiscardEvaluationDetails({
+  title,
+  evaluation,
+}: {
+  title: string;
+  evaluation: DiscardEvaluation;
+}) {
+  return (
+    <section className="discard-detail-panel">
+      <h4>{title}</h4>
+      <p>
+        有效进张（共 {evaluation.effectiveTiles} 张）：
+        {evaluation.effectiveTileDetails.length > 0
+          ? evaluation.effectiveTileDetails.map((item) => `${tileIdToLabel(item.tileId)}×${item.remainCount}`).join("、")
+          : "暂无有效进张"}
+      </p>
+      <div className="discard-risk-breakdown">
+        <p>
+          放铳风险均值 {Math.round(evaluation.riskDetail.averageRisk * 1000) / 10}%；需牌概率均值{" "}
+          {Math.round(evaluation.riskDetail.averageDemand * 1000) / 10}%。
+        </p>
+        {evaluation.riskDetail.opponents.map((opponent) => (
+          <div className="discard-risk-opponent" key={`${evaluation.tileId}-${opponent.seat}`}>
+            <p>
+              {SEAT_LABEL[opponent.seat]}：风险 {Math.round(opponent.baseRisk * 1000) / 10}% →{" "}
+              {Math.round(opponent.finalRisk * 1000) / 10}%；需牌 {Math.round(opponent.baseDemand * 1000) / 10}% →{" "}
+              {Math.round(opponent.finalDemand * 1000) / 10}%
+            </p>
+            <ul>
+              {opponent.factors.map((factor) => (
+                <li key={`${opponent.seat}-${factor.label}`}>
+                  {factor.label}（风险 {formatSignedPercentage(factor.riskDelta)} / 需牌 {formatSignedPercentage(factor.demandDelta)}）
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="discard-metrics-grid">
+        <article>
+          <h5>进攻效率</h5>
+          {renderMetricBreakdown(evaluation.efficiencyDetail)}
+        </article>
+        <article>
+          <h5>需牌规避</h5>
+          {renderMetricBreakdown(evaluation.demandAvoidanceDetail)}
+        </article>
+        <article>
+          <h5>风险控制</h5>
+          {renderMetricBreakdown(evaluation.riskControlDetail)}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function useScenarioCollections(mode: TrainingMode, ruleId: TrainingRuleId): {
+  favoriteQuestions: StoredScenarioQuestion[];
+  mistakeQuestions: StoredScenarioQuestion[];
+  refreshCollections: () => void;
+} {
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const favoriteQuestions = useMemo(
+    () => {
+      void refreshTick;
+      return loadFavoriteScenarios({ mode, ruleId });
+    },
+    [mode, ruleId, refreshTick],
+  );
+  const mistakeQuestions = useMemo(
+    () => {
+      void refreshTick;
+      return loadMistakeScenarios({ mode, ruleId });
+    },
+    [mode, ruleId, refreshTick],
+  );
+
+  function refreshCollections(): void {
+    setRefreshTick((prev) => prev + 1);
+  }
+
+  return {
+    favoriteQuestions,
+    mistakeQuestions,
+    refreshCollections,
+  };
+}
+
+function QuestionCollection({
+  title,
+  emptyText,
+  items,
+  onOpen,
+  onRemove,
+  showWrongCount = false,
+}: {
+  title: string;
+  emptyText: string;
+  items: StoredScenarioQuestion[];
+  onOpen: (item: StoredScenarioQuestion) => void;
+  onRemove: (id: string) => void;
+  showWrongCount?: boolean;
+}) {
+  return (
+    <details className="question-bank-card">
+      <summary>
+        {title}（{items.length}）
+      </summary>
+      {items.length === 0 ? (
+        <p>{emptyText}</p>
+      ) : (
+        <div className="question-bank-list">
+          {items.slice(0, 12).map((item) => (
+            <article className="question-bank-item" key={item.id}>
+              <p>
+                第 {item.scenario.round} 巡题目，更新于 {new Date(item.updatedAt).toLocaleString()}
+              </p>
+              {showWrongCount ? <p>累计答错 {item.wrongCount} 次</p> : null}
+              <div className="question-bank-item-actions">
+                <button className="btn-ghost" onClick={() => onOpen(item)} type="button">
+                  打开重做
+                </button>
+                <button className="btn-ghost" onClick={() => onRemove(item.id)} type="button">
+                  移除
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </details>
+  );
+}
+
 function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
-  const [scenario, resetScenario] = useScenario("quick", ruleId);
+  const [scenario, resetScenario, setScenario] = useScenario("quick", ruleId);
   const [selected, setSelected] = useState<number[]>([]);
   const [selectedNoWait, setSelectedNoWait] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(0);
   const ruleStrategy = useMemo(() => getTrainingRuleStrategy(ruleId), [ruleId]);
+  const { favoriteQuestions, mistakeQuestions, refreshCollections } = useScenarioCollections("quick", ruleId);
   const [result, setResult] = useState<
     | {
         score: number;
@@ -173,6 +387,36 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
 
   if (!scenario) {
     return <section className="mode-wrap">正在生成牌局...</section>;
+  }
+
+  const scenarioId = getScenarioId(scenario);
+  const isFavorited = favoriteQuestions.some((item) => item.id === scenarioId);
+  const isMistakeQuestion = mistakeQuestions.some((item) => item.id === scenarioId);
+
+  function resetRoundState(): void {
+    setSelected([]);
+    setSelectedNoWait(false);
+    setResult(null);
+    setElapsedMs(0);
+    startedAtRef.current = Date.now();
+  }
+
+  function openSavedQuestion(item: StoredScenarioQuestion): void {
+    setScenario(item.scenario);
+    resetRoundState();
+  }
+
+  function openRandomSavedQuestion(items: StoredScenarioQuestion[]): void {
+    if (items.length === 0) {
+      return;
+    }
+    const picked = items[Math.floor(Math.random() * items.length)];
+    openSavedQuestion(picked);
+  }
+
+  function toggleCurrentFavorite(): void {
+    toggleFavoriteScenario(scenario);
+    refreshCollections();
   }
 
   function toggleTile(tileId: number): void {
@@ -224,15 +468,16 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
       elapsedMs: finalElapsed,
       summary: `${evaluation.summary}；你的选择：${pickedLabel}；耗时 ${(finalElapsed / 1000).toFixed(1)}s`,
     });
+
+    if (!evaluation.correct) {
+      addMistakeScenario(scenario);
+      refreshCollections();
+    }
   }
 
   function nextQuestion(): void {
     resetScenario();
-    setSelected([]);
-    setSelectedNoWait(false);
-    setResult(null);
-    setElapsedMs(0);
-    startedAtRef.current = Date.now();
+    resetRoundState();
   }
 
   return (
@@ -245,6 +490,45 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
 
       <div className="countdown">当前用时: {(elapsedMs / 1000).toFixed(1)}s</div>
       <ScenarioPanel scenario={scenario} disableDiscard selfHint={ruleStrategy.quickSelfHint} />
+
+      <section className="scenario-tools-card">
+        <p>
+          当前题库：收藏 {favoriteQuestions.length} 题，错题 {mistakeQuestions.length} 题。
+        </p>
+        <div className="scenario-tools-actions">
+          <button className="btn-ghost" onClick={toggleCurrentFavorite} type="button">
+            {isFavorited ? "取消收藏本题" : "收藏本题"}
+          </button>
+          <button
+            className="btn-ghost"
+            disabled={favoriteQuestions.length === 0}
+            onClick={() => openRandomSavedQuestion(favoriteQuestions)}
+            type="button"
+          >
+            随机收藏题
+          </button>
+          <button
+            className="btn-ghost"
+            disabled={mistakeQuestions.length === 0}
+            onClick={() => openRandomSavedQuestion(mistakeQuestions)}
+            type="button"
+          >
+            随机错题
+          </button>
+          {isMistakeQuestion ? (
+            <button
+              className="btn-ghost"
+              onClick={() => {
+                removeMistakeScenario(scenarioId);
+                refreshCollections();
+              }}
+              type="button"
+            >
+              从错题本移除本题
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       <div className="answer-panel">
         <h3>请选择你认为能胡的牌（⚠️ 请考虑当前已露出的牌）</h3>
@@ -284,23 +568,63 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
             <p>你的选择：{result.selectedLabel}</p>
             <p>耗时：{(result.elapsedMs / 1000).toFixed(1)}s</p>
             <p>{result.summary}</p>
+            <div className="result-action-row">
+              <button className="btn-ghost" onClick={toggleCurrentFavorite} type="button">
+                {isFavorited ? "取消收藏本题" : "收藏本题"}
+              </button>
+              {isMistakeQuestion ? (
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    removeMistakeScenario(scenarioId);
+                    refreshCollections();
+                  }}
+                  type="button"
+                >
+                  从错题本移除
+                </button>
+              ) : null}
+            </div>
             <button className="btn-primary" onClick={nextQuestion} type="button">
               下一题
             </button>
           </div>
         )}
       </div>
+
+      <QuestionCollection
+        title="收藏题"
+        emptyText="还没有收藏题，遇到想复盘的牌局可以先收藏。"
+        items={favoriteQuestions}
+        onOpen={openSavedQuestion}
+        onRemove={(id) => {
+          removeFavoriteScenario(id);
+          refreshCollections();
+        }}
+      />
+      <QuestionCollection
+        title="错题本"
+        emptyText="还没有错题。答错题目会自动收录在这里。"
+        items={mistakeQuestions}
+        onOpen={openSavedQuestion}
+        onRemove={(id) => {
+          removeMistakeScenario(id);
+          refreshCollections();
+        }}
+        showWrongCount
+      />
     </section>
   );
 }
 
 function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
-  const [scenario, resetScenario] = useScenario("discard", ruleId);
+  const [scenario, resetScenario, setScenario] = useScenario("discard", ruleId);
   const [pickedDiscard, setPickedDiscard] = useState<number | null>(null);
   const [playStyle, setPlayStyle] = useState<DiscardPlayStyle>("balanced");
   const [elapsedMs, setElapsedMs] = useState(0);
   const startedAtRef = useRef<number>(0);
   const ruleStrategy = useMemo(() => getTrainingRuleStrategy(ruleId), [ruleId]);
+  const { favoriteQuestions, mistakeQuestions, refreshCollections } = useScenarioCollections("discard", ruleId);
   const styleOptions = useMemo(() => listDiscardStyleProfiles(), []);
   const playStyleProfile = useMemo(() => getDiscardStyleProfile(playStyle), [playStyle]);
   const scoreFormula = useMemo(() => getDiscardScoreFormula(playStyle), [playStyle]);
@@ -351,7 +675,11 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
     return <section className="mode-wrap">正在生成牌局...</section>;
   }
 
+  const scenarioId = getScenarioId(scenario);
+  const isFavorited = favoriteQuestions.some((item) => item.id === scenarioId);
+  const isMistakeQuestion = mistakeQuestions.some((item) => item.id === scenarioId);
   const best = evaluations[0];
+  const pickedEvaluation = pickedDiscard !== null ? evaluations.find((item) => item.tileId === pickedDiscard) ?? null : null;
   const resultChosen = result
     ? evaluations.find((item) => item.tileId === result.selectedTileId) ?? null
     : null;
@@ -367,6 +695,31 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
   const resultRank = resultChosen
     ? evaluations.findIndex((item) => item.tileId === resultChosen.tileId) + 1
     : 0;
+
+  function resetRoundState(): void {
+    setPickedDiscard(null);
+    setResult(null);
+    setElapsedMs(0);
+    startedAtRef.current = Date.now();
+  }
+
+  function openSavedQuestion(item: StoredScenarioQuestion): void {
+    setScenario(item.scenario);
+    resetRoundState();
+  }
+
+  function openRandomSavedQuestion(items: StoredScenarioQuestion[]): void {
+    if (items.length === 0) {
+      return;
+    }
+    const picked = items[Math.floor(Math.random() * items.length)];
+    openSavedQuestion(picked);
+  }
+
+  function toggleCurrentFavorite(): void {
+    toggleFavoriteScenario(scenario);
+    refreshCollections();
+  }
 
   function submitChoice(): void {
     if (pickedDiscard === null || !best) {
@@ -396,14 +749,16 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
       elapsedMs: finalElapsed,
       summary: `${playStyleProfile.label}打法推荐打 ${tileIdToLabel(best.tileId)}，你打 ${tileIdToLabel(chosen.tileId)}；${comparisonReasons[0]}；耗时 ${(finalElapsed / 1000).toFixed(1)}s`,
     });
+
+    if (!correct) {
+      addMistakeScenario(scenario);
+      refreshCollections();
+    }
   }
 
   function nextQuestion(): void {
     resetScenario();
-    setPickedDiscard(null);
-    setResult(null);
-    setElapsedMs(0);
-    startedAtRef.current = Date.now();
+    resetRoundState();
   }
 
   return (
@@ -415,6 +770,45 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
       </header>
 
       <div className="countdown">当前用时: {(elapsedMs / 1000).toFixed(1)}s</div>
+
+      <section className="scenario-tools-card">
+        <p>
+          当前题库：收藏 {favoriteQuestions.length} 题，错题 {mistakeQuestions.length} 题。
+        </p>
+        <div className="scenario-tools-actions">
+          <button className="btn-ghost" onClick={toggleCurrentFavorite} type="button">
+            {isFavorited ? "取消收藏本题" : "收藏本题"}
+          </button>
+          <button
+            className="btn-ghost"
+            disabled={favoriteQuestions.length === 0}
+            onClick={() => openRandomSavedQuestion(favoriteQuestions)}
+            type="button"
+          >
+            随机收藏题
+          </button>
+          <button
+            className="btn-ghost"
+            disabled={mistakeQuestions.length === 0}
+            onClick={() => openRandomSavedQuestion(mistakeQuestions)}
+            type="button"
+          >
+            随机错题
+          </button>
+          {isMistakeQuestion ? (
+            <button
+              className="btn-ghost"
+              onClick={() => {
+                removeMistakeScenario(scenarioId);
+                refreshCollections();
+              }}
+              type="button"
+            >
+              从错题本移除本题
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       <div className="discard-style-bar">
         <p>
@@ -467,6 +861,15 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
             <button className="btn-primary" onClick={submitChoice} type="button">
               提交弃牌
             </button>
+            {pickedEvaluation ? (
+              <details className="discard-detail-card" open>
+                <summary>当前所选弃牌详细拆解</summary>
+                <DiscardEvaluationDetails
+                  title={`打 ${tileIdToLabel(pickedEvaluation.tileId)} 后的三项分析`}
+                  evaluation={pickedEvaluation}
+                />
+              </details>
+            ) : null}
           </>
         ) : (
           <div className="result-card">
@@ -535,6 +938,39 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
                   ))}
                 </ul>
                 {resultChosen.reasons.length > 0 ? <p>{resultChosen.reasons.join("；")}</p> : null}
+                <div className="result-action-row">
+                  <button className="btn-ghost" onClick={toggleCurrentFavorite} type="button">
+                    {isFavorited ? "取消收藏本题" : "收藏本题"}
+                  </button>
+                  {isMistakeQuestion ? (
+                    <button
+                      className="btn-ghost"
+                      onClick={() => {
+                        removeMistakeScenario(scenarioId);
+                        refreshCollections();
+                      }}
+                      type="button"
+                    >
+                      从错题本移除
+                    </button>
+                  ) : null}
+                </div>
+                <details className="discard-detail-card" open>
+                  <summary>你的选择详细拆解</summary>
+                  <DiscardEvaluationDetails
+                    title={`打 ${tileIdToLabel(resultChosen.tileId)} 后的三项分析`}
+                    evaluation={resultChosen}
+                  />
+                </details>
+                {best.tileId !== resultChosen.tileId ? (
+                  <details className="discard-detail-card">
+                    <summary>推荐弃牌详细拆解</summary>
+                    <DiscardEvaluationDetails
+                      title={`打 ${tileIdToLabel(best.tileId)} 后的三项分析`}
+                      evaluation={best}
+                    />
+                  </details>
+                ) : null}
               </>
             ) : (
               <p>当前结果不可用，请直接下一题。</p>
@@ -545,6 +981,28 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
           </div>
         )}
       </div>
+
+      <QuestionCollection
+        title="收藏题"
+        emptyText="还没有收藏题，遇到想复盘的牌局可以先收藏。"
+        items={favoriteQuestions}
+        onOpen={openSavedQuestion}
+        onRemove={(id) => {
+          removeFavoriteScenario(id);
+          refreshCollections();
+        }}
+      />
+      <QuestionCollection
+        title="错题本"
+        emptyText="还没有错题。答错题目会自动收录在这里。"
+        items={mistakeQuestions}
+        onOpen={openSavedQuestion}
+        onRemove={(id) => {
+          removeMistakeScenario(id);
+          refreshCollections();
+        }}
+        showWrongCount
+      />
     </section>
   );
 }

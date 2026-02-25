@@ -1,12 +1,26 @@
 import {
   getEffectiveTileInfo,
+  getEffectiveTileInfoWithHainanHaikou,
+  getEffectiveTileInfoWithHongzhongLaizi,
+  getEffectiveTileInfoWithWuhanLaiziJiang258,
   getEffectiveTileInfoWithJiang258,
   estimateShanten,
+  estimateShantenWithHainanHaikou,
+  estimateShantenWithHongzhongLaizi,
+  estimateShantenWithWuhanLaiziJiang258,
   estimateShantenWithJiang258,
 } from "@/engine/mahjong/evaluator";
 import { detectFlushSuit } from "@/engine/mahjong/scenario";
 import { removeTileOnce, tileIdToRank, tileIdToSuit, tileIdToLabel, uniqueTileIds } from "@/engine/mahjong/tiles";
-import { DiscardEvaluation, DiscardPlayStyle, DISCARD_PLAY_STYLES, Scenario } from "@/types/mahjong";
+import {
+  DiscardEvaluation,
+  DiscardMetricBreakdown,
+  DiscardOpponentRiskDetail,
+  DiscardPlayStyle,
+  DiscardRiskFactor,
+  DISCARD_PLAY_STYLES,
+  Scenario,
+} from "@/types/mahjong";
 
 type DiscardStyleProfile = {
   label: string;
@@ -74,53 +88,129 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function estimateTileRiskAndDemand(tileId: number, scenario: Scenario): { risk: number; demand: number } {
+function estimateTileRiskAndDemand(tileId: number, scenario: Scenario): {
+  risk: number;
+  demand: number;
+  opponents: DiscardOpponentRiskDetail[];
+} {
   const suit = tileIdToSuit(tileId);
   const tileRank = tileIdToRank(tileId);
+  const safeOpponentCount = Math.max(1, scenario.opponents.length);
 
   let riskTotal = 0;
   let demandTotal = 0;
+  const opponentDetails: DiscardOpponentRiskDetail[] = [];
 
   for (const opponent of scenario.opponents) {
-    let risk = 0.62;
-    let demand = 0.55;
+    const factors: DiscardRiskFactor[] = [];
+    const baseRisk = 0.62;
+    const baseDemand = 0.55;
+    let risk = baseRisk;
+    let demand = baseDemand;
 
     if (opponent.discards.includes(tileId)) {
       risk -= 0.45;
       demand -= 0.35;
+      factors.push({
+        label: "该牌已在对手河里出现（现物）",
+        riskDelta: -0.45,
+        demandDelta: -0.35,
+      });
     }
 
     if (suit && opponent.dingQue === suit) {
       risk -= 0.2;
       demand -= 0.22;
+      factors.push({
+        label: "对手该花色定缺",
+        riskDelta: -0.2,
+        demandDelta: -0.22,
+      });
     }
 
     const flushSuit = detectFlushSuit(opponent.melds);
     if (flushSuit && suit && flushSuit === suit) {
       risk += 0.18;
       demand += 0.2;
+      factors.push({
+        label: "对手副露同花色集中（清一色倾向）",
+        riskDelta: 0.18,
+        demandDelta: 0.2,
+      });
     }
 
     if (opponent.melds.length >= 2) {
       risk += 0.06;
       demand += 0.05;
+      factors.push({
+        label: "对手副露较多（>=2 组）",
+        riskDelta: 0.06,
+        demandDelta: 0.05,
+      });
     }
 
     if (tileRank >= 3 && tileRank <= 7) {
       risk += 0.08;
       demand += 0.06;
+      factors.push({
+        label: "中张（3-7）通常更易放铳",
+        riskDelta: 0.08,
+        demandDelta: 0.06,
+      });
     } else {
       risk -= 0.03;
       demand -= 0.03;
+      factors.push({
+        label: "幺九牌相对更安全",
+        riskDelta: -0.03,
+        demandDelta: -0.03,
+      });
     }
 
-    riskTotal += clamp(risk, 0.03, 0.95);
-    demandTotal += clamp(demand, 0.03, 0.95);
+    const finalRisk = clamp(risk, 0.03, 0.95);
+    const finalDemand = clamp(demand, 0.03, 0.95);
+    const riskClampDelta = finalRisk - risk;
+    const demandClampDelta = finalDemand - demand;
+    if (riskClampDelta !== 0 || demandClampDelta !== 0) {
+      factors.push({
+        label: "边界裁剪（clamp 到 3%-95%）",
+        riskDelta: riskClampDelta,
+        demandDelta: demandClampDelta,
+      });
+    }
+
+    riskTotal += finalRisk;
+    demandTotal += finalDemand;
+    opponentDetails.push({
+      seat: opponent.seat,
+      baseRisk,
+      baseDemand,
+      finalRisk,
+      finalDemand,
+      factors,
+    });
   }
 
   return {
-    risk: riskTotal / scenario.opponents.length,
-    demand: demandTotal / scenario.opponents.length,
+    risk: riskTotal / safeOpponentCount,
+    demand: demandTotal / safeOpponentCount,
+    opponents: opponentDetails,
+  };
+}
+
+function buildMetricBreakdown(input: {
+  formula: string;
+  baseScore: number;
+  penalties: Array<{ label: string; value: number }>;
+  bonuses?: Array<{ label: string; value: number }>;
+  finalScore: number;
+}): DiscardMetricBreakdown {
+  return {
+    formula: input.formula,
+    baseScore: input.baseScore,
+    penaltyTerms: input.penalties,
+    bonusTerms: input.bonuses ?? [],
+    finalScore: input.finalScore,
   };
 }
 
@@ -150,21 +240,42 @@ function buildReasons(result: DiscardEvaluation): string[] {
 
 function evaluateDiscardBaseOptions(scenario: Scenario): DiscardBaseEvaluation[] {
   const options = uniqueTileIds(scenario.selfHand);
-  const useJiang258 = scenario.ruleId === "changsha-258-jiang";
 
   return options.map((tileId) => {
     const nextHand = removeTileOnce(scenario.selfHand, tileId);
-    const shantenAfter = useJiang258
-      ? estimateShantenWithJiang258(nextHand)
-      : estimateShanten(nextHand);
-    const effective = useJiang258
-      ? getEffectiveTileInfoWithJiang258(nextHand, scenario.remainingCounts)
-      : getEffectiveTileInfo(nextHand, scenario.remainingCounts);
-    const { risk, demand } = estimateTileRiskAndDemand(tileId, scenario);
-
+    const shantenAfter =
+      scenario.ruleId === "changsha-258-jiang"
+        ? estimateShantenWithJiang258(nextHand)
+        : scenario.ruleId === "guangdong-hongzhong"
+          ? estimateShantenWithHongzhongLaizi(nextHand)
+          : scenario.ruleId === "wuhan-hongzhong-fa-laizi-gang"
+            ? estimateShantenWithWuhanLaiziJiang258(nextHand)
+            : scenario.ruleId === "hainan-mahjong"
+              ? estimateShantenWithHainanHaikou(nextHand)
+          : estimateShanten(nextHand);
+    const effective =
+      scenario.ruleId === "changsha-258-jiang"
+        ? getEffectiveTileInfoWithJiang258(nextHand, scenario.remainingCounts)
+        : scenario.ruleId === "guangdong-hongzhong"
+          ? getEffectiveTileInfoWithHongzhongLaizi(nextHand, scenario.remainingCounts)
+          : scenario.ruleId === "wuhan-hongzhong-fa-laizi-gang"
+            ? getEffectiveTileInfoWithWuhanLaiziJiang258(nextHand, scenario.remainingCounts)
+            : scenario.ruleId === "hainan-mahjong"
+              ? getEffectiveTileInfoWithHainanHaikou(nextHand, scenario.remainingCounts)
+          : getEffectiveTileInfo(nextHand, scenario.remainingCounts);
+    const riskEstimate = estimateTileRiskAndDemand(tileId, scenario);
+    const { risk, demand } = riskEstimate;
+    const lowShantenBonus = shantenAfter <= 1 ? 8 : 0;
     const efficiency = clamp(100 - shantenAfter * 22 + effective.copyCount * 1.3, 0, 100);
     const demandAvoidance = clamp(100 - demand * 100, 0, 100);
-    const riskControl = clamp(100 - risk * 100 + (shantenAfter <= 1 ? 8 : 0), 0, 100);
+    const riskControl = clamp(100 - risk * 100 + lowShantenBonus, 0, 100);
+
+    const effectiveTileDetails = effective.improvingTiles
+      .map((improvingTileId) => ({
+        tileId: improvingTileId,
+        remainCount: Math.max(0, scenario.remainingCounts[improvingTileId] ?? 0),
+      }))
+      .sort((a, b) => b.remainCount - a.remainCount || a.tileId - b.tileId);
 
     const evaluation: DiscardBaseEvaluation = {
       tileId,
@@ -174,6 +285,35 @@ function evaluateDiscardBaseOptions(scenario: Scenario): DiscardBaseEvaluation[]
       shantenAfter,
       effectiveTiles: effective.copyCount,
       risk,
+      effectiveTileDetails,
+      riskDetail: {
+        averageRisk: risk,
+        averageDemand: demand,
+        opponents: riskEstimate.opponents,
+      },
+      efficiencyDetail: buildMetricBreakdown({
+        formula: "效率 = clamp(100 - 向听 × 22 + 有效进张 × 1.3, 0, 100)",
+        baseScore: 100,
+        penalties: [{ label: `向听惩罚（${shantenAfter} × 22）`, value: shantenAfter * 22 }],
+        bonuses: [{ label: `进张加成（${effective.copyCount} × 1.3）`, value: effective.copyCount * 1.3 }],
+        finalScore: efficiency,
+      }),
+      demandAvoidanceDetail: buildMetricBreakdown({
+        formula: "需牌规避 = clamp(100 - 需牌概率 × 100, 0, 100)",
+        baseScore: 100,
+        penalties: [{ label: `需牌概率惩罚（${Math.round(demand * 1000) / 10}%）`, value: demand * 100 }],
+        finalScore: demandAvoidance,
+      }),
+      riskControlDetail: buildMetricBreakdown({
+        formula: "风险控制 = clamp(100 - 放铳风险 × 100 + 低向听奖励, 0, 100)",
+        baseScore: 100,
+        penalties: [{ label: `放铳风险惩罚（${Math.round(risk * 1000) / 10}%）`, value: risk * 100 }],
+        bonuses:
+          lowShantenBonus > 0
+            ? [{ label: `低向听奖励（向听 ${shantenAfter}）`, value: lowShantenBonus }]
+            : [],
+        finalScore: riskControl,
+      }),
     };
     return evaluation;
   });
@@ -242,7 +382,7 @@ export function getDiscardScoreFormula(playStyle: DiscardPlayStyle): DiscardScor
       },
       {
         term: "放铳风险",
-        explain: "打出该牌后被他家和牌的估计风险值，越低越安全。",
+        explain: "由现物/定缺/副露集中/中张与副露数量综合估计，按三家取均值。",
       },
       {
         term: "需牌概率",

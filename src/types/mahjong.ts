@@ -7,11 +7,15 @@ export type DiscardPlayStyle = (typeof DISCARD_PLAY_STYLES)[number];
 export const TRAINING_RULE_IDS = [
   "sichuan-blood-battle",
   "changsha-258-jiang",
+  "wuhan-hongzhong-fa-laizi-gang",
   "guizhou-zhuoji",
+  "guangdong-hongzhong",
   "xiamen-mahjong",
   "fujian-mahjong",
   "shenyang-mahjong",
+  "hebei-mahjong",
   "hangzhou-mahjong",
+  "hainan-mahjong",
   "japanese-riichi",
   "suzhou-mahjong",
 ] as const;
@@ -22,6 +26,40 @@ export type OpponentState = {
   dingQue: Suit | null;
   discards: number[];
   melds: number[][];
+};
+
+export type DiscardEffectiveTileDetail = {
+  tileId: number;
+  remainCount: number;
+};
+
+export type DiscardRiskFactor = {
+  label: string;
+  riskDelta: number;
+  demandDelta: number;
+};
+
+export type DiscardOpponentRiskDetail = {
+  seat: OpponentState["seat"];
+  baseRisk: number;
+  baseDemand: number;
+  finalRisk: number;
+  finalDemand: number;
+  factors: DiscardRiskFactor[];
+};
+
+export type DiscardRiskDetail = {
+  averageRisk: number;
+  averageDemand: number;
+  opponents: DiscardOpponentRiskDetail[];
+};
+
+export type DiscardMetricBreakdown = {
+  formula: string;
+  baseScore: number;
+  penaltyTerms: Array<{ label: string; value: number }>;
+  bonusTerms: Array<{ label: string; value: number }>;
+  finalScore: number;
 };
 
 export type Scenario = {
@@ -43,6 +81,11 @@ export type DiscardEvaluation = {
   shantenAfter: number;
   effectiveTiles: number;
   risk: number;
+  effectiveTileDetails: DiscardEffectiveTileDetail[];
+  riskDetail: DiscardRiskDetail;
+  efficiencyDetail: DiscardMetricBreakdown;
+  demandAvoidanceDetail: DiscardMetricBreakdown;
+  riskControlDetail: DiscardMetricBreakdown;
   reasons: string[];
 };
 
