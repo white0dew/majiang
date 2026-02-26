@@ -18,6 +18,13 @@ export const TRAINING_RULE_IDS = [
   "hainan-mahjong",
   "japanese-riichi",
   "suzhou-mahjong",
+  "tianjin-mahjong",
+  "nanning-mahjong",
+  "guangdong-tuidaohu",
+  "shanxi-koudiandian",
+  "ningxia-huashui-mahjong",
+  "luoyang-gangci",
+  "nanjing-mahjong",
 ] as const;
 export type TrainingRuleId = (typeof TRAINING_RULE_IDS)[number];
 

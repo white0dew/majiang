@@ -10,8 +10,8 @@ const links = [
 
 export function MainNav() {
   return (
-    <header className="sticky top-0 z-20 border-b border-[#8d6e6324] bg-[#f5e7c8]/90 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+    <header className="main-nav sticky top-0 z-20 border-b border-[#8d6e6324] bg-[#f5e7c8]/90 backdrop-blur">
+      <nav className="main-nav__inner mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
         <Link className="brand-link" href="/">
           <Image
             className="brand-mark"

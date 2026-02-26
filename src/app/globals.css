@@ -709,6 +709,8 @@ body.orientation-locked {
 }
 
 .mahjong-board {
+  --table-stage-base-height: 660px;
+  --table-stage-scale: 1;
   border: 1px solid #7a5b3e3f;
   border-radius: 1rem;
   padding: 0.9rem;
@@ -727,9 +729,21 @@ body.orientation-locked {
   margin-bottom: 0.6rem;
 }
 
+.table-stage-frame {
+  height: calc(var(--table-stage-base-height) * var(--table-stage-scale));
+  overflow: hidden;
+}
+
+.table-stage-scale {
+  width: 100%;
+  transform: scale(var(--table-stage-scale));
+  transform-origin: top center;
+}
+
 .table-stage {
   position: relative;
-  min-height: 660px;
+  width: 100%;
+  min-height: var(--table-stage-base-height);
   border: 1px solid #224b353a;
   border-radius: 0.95rem;
   overflow: hidden;
@@ -1330,8 +1344,8 @@ body.orientation-locked {
     width: min(240px, 82vw);
   }
 
-  .table-stage {
-    min-height: 620px;
+  .mahjong-board {
+    --table-stage-base-height: 620px;
   }
 
   .meld-zone--across {
@@ -1386,8 +1400,8 @@ body.orientation-locked {
 }
 
 @media (max-width: 560px) {
-  .table-stage {
-    min-height: 590px;
+  .mahjong-board {
+    --table-stage-base-height: 590px;
   }
 
   .table-seat--left,
@@ -1439,5 +1453,51 @@ body.orientation-locked {
 
   .self-hand {
     gap: 0.25rem;
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 620px) {
+  .main-nav__inner {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .brand-mark {
+    width: 1.3rem;
+  }
+
+  .brand-title {
+    font-size: 0.98rem;
+  }
+
+  .nav-link {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.76rem;
+  }
+
+  .mahjong-board {
+    --table-stage-scale: 0.78;
+    padding: 0.65rem;
+  }
+
+  .board-meta {
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem;
+  }
+
+  .seat-title {
+    font-size: 0.64rem;
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 520px) {
+  .mahjong-board {
+    --table-stage-scale: 0.66;
+  }
+}
+
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 430px) {
+  .mahjong-board {
+    --table-stage-scale: 0.56;
   }
 }

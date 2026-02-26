@@ -241,6 +241,55 @@ const suzhouStrategy = createNoDingQueStrategy({
   description: "无定缺，当前先按通用决策训练，后续可补苏州本地细则。",
 });
 
+const tianjinStrategy = createNoDingQueStrategy({
+  id: "tianjin-mahjong",
+  title: "天津麻将",
+  shortLabel: "天津麻将",
+  description: "无定缺，先按通用题型训练听牌速度、进张质量与后盘防守。",
+});
+
+const nanningStrategy = createNoDingQueStrategy({
+  id: "nanning-mahjong",
+  title: "南宁麻将",
+  shortLabel: "南宁麻将",
+  description: "无定缺，先练稳定听牌与风险控制，再逐步叠加地方结算细则。",
+});
+
+const guangdongTuiDaoHuStrategy = createNoDingQueStrategy({
+  id: "guangdong-tuidaohu",
+  title: "广东麻将（推倒胡）",
+  shortLabel: "广东推倒胡",
+  description: "常见推倒胡口径：无定缺，先提速听牌，再减少中后盘点炮。",
+});
+
+const shanxiKouDianDianStrategy = createNoDingQueStrategy({
+  id: "shanxi-koudiandian",
+  title: "山西麻将（扣点点）",
+  shortLabel: "山西扣点点",
+  description: "无定缺，先按通用训练提升决策稳定性，后续可接入扣点点细则。",
+});
+
+const ningxiaHuaShuiStrategy = createNoDingQueStrategy({
+  id: "ningxia-huashui-mahjong",
+  title: "宁夏划水麻将",
+  shortLabel: "宁夏划水",
+  description: "无定缺，优先训练听牌效率与防守切换，避免高风险硬冲。",
+});
+
+const luoyangGangCiStrategy = createNoDingQueStrategy({
+  id: "luoyang-gangci",
+  title: "洛阳麻将（杠次）",
+  shortLabel: "洛阳杠次",
+  description: "无定缺，先练基础胡牌路线与弃牌安全性，再补杠次结算细节。",
+});
+
+const nanjingStrategy = createNoDingQueStrategy({
+  id: "nanjing-mahjong",
+  title: "南京麻将",
+  shortLabel: "南京麻将",
+  description: "无定缺，先以通用决策框架训练，后续可扩展南京本地规则。",
+});
+
 export const TRAINING_RULE_STRATEGIES: Record<TrainingRuleId, TrainingRuleStrategy> = {
   "sichuan-blood-battle": sichuanBloodBattleStrategy,
   "changsha-258-jiang": changshaJiangStrategy,
@@ -255,6 +304,13 @@ export const TRAINING_RULE_STRATEGIES: Record<TrainingRuleId, TrainingRuleStrate
   "hainan-mahjong": hainanStrategy,
   "japanese-riichi": japaneseRiichiStrategy,
   "suzhou-mahjong": suzhouStrategy,
+  "tianjin-mahjong": tianjinStrategy,
+  "nanning-mahjong": nanningStrategy,
+  "guangdong-tuidaohu": guangdongTuiDaoHuStrategy,
+  "shanxi-koudiandian": shanxiKouDianDianStrategy,
+  "ningxia-huashui-mahjong": ningxiaHuaShuiStrategy,
+  "luoyang-gangci": luoyangGangCiStrategy,
+  "nanjing-mahjong": nanjingStrategy,
 };
 
 export function isTrainingRuleId(value: string): value is TrainingRuleId {

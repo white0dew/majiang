@@ -70,6 +70,13 @@ const REGION_TILE_CASES: RegionTileCase[] = [
     excludeTiles: [],
   },
   numberOnlyCase("suzhou-mahjong"),
+  numberOnlyCase("tianjin-mahjong"),
+  numberOnlyCase("nanning-mahjong"),
+  numberOnlyCase("guangdong-tuidaohu"),
+  numberOnlyCase("shanxi-koudiandian"),
+  numberOnlyCase("ningxia-huashui-mahjong"),
+  numberOnlyCase("luoyang-gangci"),
+  numberOnlyCase("nanjing-mahjong"),
 ];
 
 describe("regions/all-regions-tiles", () => {
