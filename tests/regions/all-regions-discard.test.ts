@@ -46,12 +46,19 @@ function createDiscardScenario(ruleId: TrainingRuleId): Scenario {
     const meld1 = pickLoop(pool, 20 + index * 8, 3);
     const meld2 = index === 1 ? pickLoop(pool, 23 + index * 8, 3) : [];
     const melds = meld2.length > 0 ? [meld1, meld2] : [meld1];
+    const dingQue: Scenario["opponents"][number]["dingQue"] = strategy.usesDingQue
+      ? index === 0
+        ? "wan"
+        : index === 1
+          ? "tiao"
+          : "tong"
+      : null;
     consumeSeenTiles(remainingCounts, discards);
     consumeSeenTiles(remainingCounts, melds.flat());
 
     return {
       seat,
-      dingQue: strategy.usesDingQue ? (index === 0 ? "wan" : index === 1 ? "tiao" : "tong") : null,
+      dingQue,
       discards,
       melds,
     };

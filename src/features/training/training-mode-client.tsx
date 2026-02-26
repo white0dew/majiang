@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import { ScenarioPanel } from "@/components/scenario-panel";
 import { TileChip } from "@/components/tile-chip";
 import { getTrainingRuleStrategy } from "@/engine/mahjong/rule-strategies";
@@ -182,7 +183,7 @@ function formatSignedPercentage(value: number): string {
   return `${sign}${(value * 100).toFixed(1)}%`;
 }
 
-function renderMetricBreakdown(detail: DiscardMetricBreakdown): JSX.Element {
+function renderMetricBreakdown(detail: DiscardMetricBreakdown): ReactElement {
   return (
     <div className="metric-breakdown">
       <p className="metric-breakdown-formula">{detail.formula}</p>
@@ -415,6 +416,9 @@ function QuickMode({ ruleId }: { ruleId: TrainingRuleId }) {
   }
 
   function toggleCurrentFavorite(): void {
+    if (!scenario) {
+      return;
+    }
     toggleFavoriteScenario(scenario);
     refreshCollections();
   }
@@ -717,12 +721,15 @@ function DiscardMode({ ruleId }: { ruleId: TrainingRuleId }) {
   }
 
   function toggleCurrentFavorite(): void {
+    if (!scenario) {
+      return;
+    }
     toggleFavoriteScenario(scenario);
     refreshCollections();
   }
 
   function submitChoice(): void {
-    if (pickedDiscard === null || !best) {
+    if (pickedDiscard === null || !best || !scenario) {
       return;
     }
 
